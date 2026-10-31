@@ -1,0 +1,22 @@
+# Render blueprint: one free web service. No database or workers (SQLite is reseeded on boot).
+services:
+  - type: web
+    name: quoteloom
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: 22.9.0
+      - key: DATABASE_PATH
+        value: /tmp/quoteloom.db
+      # Optional, set in the Render dashboard (sync: false keeps them out of the repo).
+      # With none set the app runs in simulation mode.
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false

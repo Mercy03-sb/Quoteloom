@@ -6,7 +6,7 @@ Fake data only. Sandbox only. No real money.
 
 ## Run locally
 
-Requires Node 20.9+ (tested on Node 22).
+Requires Node 22 (`engines` in package.json; Render uses 22.9.0).
 
 ```bash
 npm install && npm run dev
@@ -44,6 +44,14 @@ curl -s http://localhost:3000/m/loom-and-thread/mcp \
 ```
 
 To use it from Claude Desktop, add it as a remote MCP server. Claude Desktop reaches it only over a public HTTPS URL (for example the Render deploy), or locally through a bridge such as `npx mcp-remote http://localhost:3000/m/loom-and-thread/mcp`.
+
+## PayPal sandbox
+
+`lib/paypal.ts` creates Orders v2 through `@paypal/paypal-server-sdk`, written with the **APIMatic Context Plugin for PayPal**. Without `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` it simulates orders and never touches the network. `GET /api/dev/paypal-test` creates an order and returns `{ mode, orderId, approvalUrl }`.
+
+## Deploy on Render
+
+`render.yaml` is a blueprint for one free Node web service (build `npm ci && npm run build`, start `npm run start`, `NODE_VERSION` 22.9.0, DB in `/tmp`). Create a Blueprint from the repo; PayPal and Gemini keys are optional and set in the dashboard. The free tier sleeps when idle, so open the URL once before using it as a connector.
 
 ## Layout
 

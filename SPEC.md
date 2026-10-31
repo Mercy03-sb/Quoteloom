@@ -11,7 +11,8 @@ Paste a small shop's URL (or upload a CSV). Quoteloom builds an agent-ready stor
 ## Status (update this section at the end of every session)
 
 - DONE: Milestone 1 core (commit 48cf614). Next.js + TypeScript, SQLite with all spec tables and a seed, one demo shop "Loom & Thread" with 12 products, `search_products` MCP tool at `/m/{shop}/mcp` (plain JSON, no sessions), search logging, 17 tests passing, build passing, runs with no env vars.
-- NEXT (Milestone 1b): Render deploy (`render.yaml`, Node version), `lib/paypal.ts` sandbox order via the APIMatic Context Plugin, a dev route that creates a sandbox order, test the Render URL as a custom connector in Claude Desktop.
+- DONE: Milestone 1b code: `render.yaml`, `engines` Node 22, `lib/paypal.ts` (sandbox order via APIMatic Context Plugin, sim fallback), `/api/dev/paypal-test`, 24 tests passing.
+- TODO (manual, needs accounts): deploy the blueprint on Render, set sandbox creds, hit `/api/dev/paypal-test` for a real sandbox link, and test the Render MCP URL as a custom connector in Claude Desktop.
 - Then Milestone 2 together with the design foundation (see UI and design).
 
 ## Hard constraints
