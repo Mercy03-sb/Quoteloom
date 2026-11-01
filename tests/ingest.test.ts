@@ -166,7 +166,7 @@ describe("pipeline", () => {
     expect(r.methods).toEqual({ jsonld: 6, opengraph: 0, llm: 0, rules: 0 }); // each product counted once, though it appears on two pages
     expect(r.products.find((p) => p.sku === "CK-MUG-WHT")).toMatchObject({ price_cents: 2400, currency: "USD", stock: 10 });
     expect(r.products.find((p) => p.sku === "CK-BAKE-OV")?.stock).toBe(0);
-    expect(r.shopName).toMatch(/Clay & Kiln/);
+    expect(r.shopName).toBe("Clay & Kiln");
     expect([...new Set(steps.map((s) => s.id))]).toEqual(["validate", "fetch", "discover", "pages", "extract", "draft"]);
     expect(steps.at(-1)).toMatchObject({ id: "draft", status: "done" });
   });
@@ -255,7 +255,7 @@ describe("pipeline", () => {
         fetchImpl: fetchImpl as unknown as typeof fetch,
       });
       expect(r.methods).toMatchObject({ llm: 0, rules: 1 });
-      expect(r.warnings.join(" ")).toMatch(/Gemini unavailable \(rate_limited\)/);
+      expect(r.warnings.join(" ")).toMatch(/Gemini 429/);
     });
 
     it("falls back on a network error and on garbage output, and honours the cooldown after a 429", async () => {

@@ -18,6 +18,7 @@ Open http://localhost:3000. No environment variables are needed: the app starts 
 | --- | --- |
 | `npm run dev` | Start locally (sim mode by default) |
 | `npm run seed` | Reset the SQLite DB to the demo state |
+| `npm run check:gemini` | One tiny Gemini call with the configured key and model; prints the real error if it fails (`-- --models` lists valid model names) |
 | `npm test` | Unit tests (Vitest) |
 | `npm run build` | Production build |
 

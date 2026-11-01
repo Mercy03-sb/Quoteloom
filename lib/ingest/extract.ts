@@ -120,9 +120,13 @@ export function extractStructured(html: string): PageExtraction {
   return { products: [], method: "none", itemUrls: urls };
 }
 
+/** The fake demo stores add "(fake demo store)" to their page titles; it should not end up in a shop name. */
+const DEMO_SUFFIX = /\s*\((?:fake )?demo(?: store)?\)\s*$/i;
+
 /** Best guess at the shop's name for the Setup form. */
 export function shopNameFrom(html: string, host: string): string {
   const m = metaTags(html);
   const raw = m["og:site_name"] ?? pageTitle(html) ?? host;
-  return squash(decodeEntities(raw)).split(/\s[|–—-]\s/)[0].slice(0, 80) || host;
+  const name = squash(decodeEntities(raw)).split(/\s[|–—-]\s/)[0].replace(DEMO_SUFFIX, "").trim();
+  return name.slice(0, 80) || host;
 }

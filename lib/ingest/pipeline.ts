@@ -1,6 +1,7 @@
 // URL ingest: fetch -> discover product pages -> extract (JSON-LD, Open Graph) -> LLM fallback -> rules fallback -> draft.
 import type { DB } from "../db";
 import { renderDemoShopPage } from "../demo-shops";
+import { describeFailure } from "../llm";
 import { MAX_PRODUCTS, skuFromTitle, type DraftProduct } from "./draft";
 import { extractStructured, shopNameFrom } from "./extract";
 import { sameOriginLinks } from "./html";
@@ -171,7 +172,7 @@ export async function ingestUrl(db: DB, rawUrl: string, o: IngestOptions): Promi
         const r = await normaliseWithLlm(db, page.text, { env: o.env, fetchImpl: o.fetchImpl });
         got = r.products;
         if (got.length) tag(got, "llm");
-        else if (!r.llm.ok && r.llm.reason !== "no_key" && r.llm.reason !== "empty") llmNote = `Gemini unavailable (${r.llm.reason}); used the rule-based parser.`;
+        else if (!r.llm.ok && r.llm.reason !== "no_key" && !(r.llm.reason === "empty" && !r.llm.detail)) llmNote = `${describeFailure(r.llm)}; used the rule-based parser.`;
       }
       if (got.length === 0) {
         got = parseRuleBased(page.text);
