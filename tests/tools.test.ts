@@ -66,7 +66,7 @@ describe("MCP buying tools", () => {
     );
     const names = (await res.json()).result.tools.map((t: { name: string }) => t.name);
     expect(names).toEqual(
-      expect.arrayContaining(["search_products", "request_quote", "create_checkout", "get_order_status"]),
+      expect.arrayContaining(["search_products", "get_product", "request_quote", "create_checkout", "get_order_status"]),
     );
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkQuantity, DEFAULT_RULES, decideUnitPrice, parseRules, PolicyError } from "@/lib/policy";
+import { checkQuantity, DEFAULT_RULES, parseRules, PolicyError } from "@/lib/policy";
 
 describe("parseRules", () => {
   it("reads valid rules", () => {
@@ -8,6 +8,7 @@ describe("parseRules", () => {
       max_discount_pct: 5,
       negotiation: false,
       max_qty: 3,
+      quantity_breaks: [],
     });
   });
   it("falls back to defaults for missing, broken or out-of-range values", () => {
@@ -34,27 +35,5 @@ describe("checkQuantity", () => {
     expect(() => checkQuantity(1, 0, rules)).toThrowError(expect.objectContaining({ code: "out_of_stock" }));
     expect(() => checkQuantity(3, 2, rules)).toThrowError(expect.objectContaining({ code: "insufficient_stock" }));
     expect(() => checkQuantity(3, 2, rules)).toThrow(PolicyError);
-  });
-});
-
-describe("decideUnitPrice (no negotiation yet)", () => {
-  it("quotes list price when there is no offer", () => {
-    expect(decideUnitPrice({ listPriceCents: 4800, rules: DEFAULT_RULES })).toMatchObject({
-      unitPriceCents: 4800,
-      negotiated: false,
-    });
-  });
-  it("never lowers the price for a lower offer, even when negotiation is on", () => {
-    const d = decideUnitPrice({
-      listPriceCents: 4800,
-      offerCents: 1,
-      rules: { ...DEFAULT_RULES, negotiation: true, max_discount_pct: 99 },
-    });
-    expect(d.unitPriceCents).toBe(4800);
-    expect(d.negotiated).toBe(false);
-    expect(d.note).toMatch(/not available/);
-  });
-  it("does not raise the price for a higher offer", () => {
-    expect(decideUnitPrice({ listPriceCents: 4800, offerCents: 9999, rules: DEFAULT_RULES }).unitPriceCents).toBe(4800);
   });
 });

@@ -3,7 +3,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Shop } from "./catalog";
 import type { DB } from "./db";
-import { checkQuantity, decideUnitPrice, parseRules } from "./policy";
 
 export const QUOTE_TTL_MS = 10 * 60 * 1000;
 
@@ -60,73 +59,8 @@ export function verifyQuote(f: QuoteFields, signature: string, secret: string, n
   return { ok: true };
 }
 
-type ProductForQuote = { title: string; price_cents: number; currency: string; stock: number };
-
-export type IssueInput = { sku: string; qty: number; offerCents?: number; agentId?: string | null };
-
-/** Apply policy, sign, and store a quote. Throws PolicyError / QuoteError. */
-export function issueQuote(
-  db: DB,
-  shop: Shop,
-  input: IssueInput,
-  opts: { now?: Date; secret?: string } = {},
-): Quote & { title: string; note: string } {
-  const now = opts.now ?? new Date();
-  const secret = opts.secret ?? signingSecret();
-  const product = db
-    .prepare("SELECT title, price_cents, currency, stock FROM products WHERE shop_id = ? AND sku = ?")
-    .get(shop.id, input.sku) as ProductForQuote | undefined;
-  if (!product) throw new QuoteError("unknown_sku", `No product with SKU ${input.sku}.`);
-
-  const rulesRow = db.prepare("SELECT rules_json FROM shops WHERE id = ?").get(shop.id) as { rules_json: string };
-  const rules = parseRules(rulesRow.rules_json);
-  checkQuantity(input.qty, product.stock, rules);
-  const decision = decideUnitPrice({ listPriceCents: product.price_cents, offerCents: input.offerCents, rules });
-
-  const fields: QuoteFields = {
-    id: `q_${randomBytes(12).toString("hex")}`,
-    shop: shop.slug,
-    sku: input.sku,
-    qty: input.qty,
-    price_cents: decision.unitPriceCents,
-    currency: product.currency,
-    expires_at: new Date(now.getTime() + QUOTE_TTL_MS).toISOString(),
-  };
-  const signature = signQuote(fields, secret);
-  const transcript = [
-    {
-      ts: now.toISOString(),
-      type: "request",
-      sku: input.sku,
-      qty: input.qty,
-      offer_cents: input.offerCents ?? null,
-      agent: input.agentId ?? null,
-    },
-    {
-      ts: now.toISOString(),
-      type: "decision",
-      unit_price_cents: decision.unitPriceCents,
-      negotiated: decision.negotiated,
-      note: decision.note,
-    },
-  ];
-  db.prepare(
-    `INSERT INTO quotes (id, shop_id, sku, qty, price_cents, currency, expires_at, signature, transcript_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    fields.id,
-    shop.id,
-    fields.sku,
-    fields.qty,
-    fields.price_cents,
-    fields.currency,
-    fields.expires_at,
-    signature,
-    JSON.stringify(transcript),
-  );
-
-  return { ...fields, signature, total_cents: fields.price_cents * fields.qty, title: product.title, note: decision.note };
-}
+// issueQuote / issueQuoteDrafted live in ./quote-issue (re-exported here for existing imports).
+export { issueQuote, issueQuoteDrafted, NEGOTIATION_WINDOW_MS, type IssueInput, type IssuedQuote } from "./quote-issue";
 
 type QuoteRow = {
   id: string;

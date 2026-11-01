@@ -70,9 +70,17 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE TABLE IF NOT EXISTS disputes (
   id TEXT PRIMARY KEY,
   order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-  paypal_dispute_id TEXT,
-  status TEXT NOT NULL,
-  evidence_json TEXT NOT NULL DEFAULT '{}'
+  paypal_dispute_id TEXT UNIQUE,
+  status TEXT NOT NULL, -- OPEN (needs evidence) | SUBMITTED | RESOLVED
+  evidence_json TEXT NOT NULL DEFAULT '{}',
+  reason TEXT NOT NULL DEFAULT '',
+  amount_cents INTEGER NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  simulated INTEGER NOT NULL DEFAULT 0,
+  paypal_status TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  submitted_at TEXT,
+  submission_json TEXT
 );
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY,

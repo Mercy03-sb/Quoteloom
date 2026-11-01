@@ -35,7 +35,8 @@ http://localhost:3000/m/loom-and-thread/mcp
 Tools:
 
 - `search_products(query, max_price?, limit?)`: keyword search over the shop catalog. `max_price` is in major units (e.g. `50` = $50.00). Every search, including zero-result ones, is logged to `search_log`.
-- `request_quote(sku, qty, offer_price?)`: a signed price commitment valid for 10 minutes. Prices come from `lib/policy.ts` and `lib/quote.ts`, never from an LLM. Everything is quoted at list price for now (negotiation is Milestone 4).
+- `get_product(sku)`: full public details of one product (description, attributes, price, stock, quantity discounts, whether it negotiates). Merchant cost and floor prices are never returned.
+- `request_quote(sku, qty, offer_price?)`: a signed price commitment valid for 10 minutes. With `offer_price` (per unit) the shop negotiates within its rules: it accepts, counters with the best price it can do, or declines when negotiation is off. The price is set by `lib/policy.ts`, never by an LLM (see Negotiation below).
 - `create_checkout(quote_id)`: verifies the quote signature and expiry, creates a PayPal order (simulated without credentials), returns an `approval_url` a human opens to pay. One order per quote.
 - `get_order_status(order_id)`: `CREATED`, `APPROVED`, `PAID`, `FAILED` or `REFUNDED`.
 
@@ -64,6 +65,18 @@ Quotes are signed with HMAC-SHA256 using `QUOTE_SIGNING_SECRET` (a random per-pr
 `POST /api/webhooks/paypal` verifies the signature before touching anything: in sandbox mode through PayPal's verify-webhook-signature API (needs `PAYPAL_WEBHOOK_ID`; without it every webhook is rejected), in simulation mode through an HMAC header that the app's own simulated webhooks carry. Events are deduplicated by id and order status only moves forward, so a late or repeated event cannot undo a payment.
 
 `/api/dev/*` routes are 404 in production unless `ALLOW_DEV_ROUTES=1`.
+
+## Negotiation, orders and disputes (Milestone 4)
+
+**Negotiation.** `lib/policy.ts` decides the unit price from the shop's rules: negotiation on/off, max discount %, minimum margin % (used when a product has a cost), an optional per-product floor (`attrs.floor_cents`) and quantity breaks. A quantity break lowers the standing price; an offer at or above the floor (and below the standing price) is accepted; an offer below the floor gets a counter at the midpoint, never under the floor; after 5 offers from the same agent for the same SKU the best price already given is final. The signed quote records the negotiated price, and its transcript stores the request, offer history, decision reasons and the reply. Gemini (through `lib/llm.ts`) may word the reply; it is only asked after the price is fixed, and any draft that mentions an amount we did not give it is discarded for a template. With no key the template is used.
+
+**Rules editor.** `/settings` edits the rules for a shop you published (the shared demo shop is read-only). New shops start with negotiation off.
+
+**Orders.** `/orders` is an AG Grid table (column filters, status chips, search, "negotiated only"); `/orders/{id}` shows the price, negotiation outcome and reasons, and the audit trail.
+
+**Disputes.** `/disputes` lists disputes; `/disputes/{id}` shows the evidence packet (checks, buyer request, negotiation transcript, signed quote with signature and validity at order time, order and capture, timeline) and an approve button. `CUSTOMER.DISPUTE.CREATED/UPDATED/RESOLVED` webhooks are verified and deduplicated like the others, matched to an order by capture id, and stored. Approving submits the packet to `POST /v1/customer/disputes/{id}/provide-evidence` (sandbox). The PayPal SDK has no Disputes controller, so this one call uses plain `fetch`.
+
+**Simulate dispute** (order page, paid orders only) creates a record clearly labelled *Simulated*, builds the same packet and runs the same code, but skips the final HTTP call. Real sandbox disputes were not tried. To test one by hand you would need a sandbox buyer account to open a dispute against a captured sandbox payment (from the sandbox buyer's PayPal Resolution Center, or the sandbox "Create dispute" tool in the developer dashboard if enabled), plus a webhook subscribed to `CUSTOMER.DISPUTE.*`. Whether `provide-evidence` accepts the JSON body used here for every dispute type is untested.
 
 ## Setting up your own shop (Milestone 3)
 
@@ -100,7 +113,8 @@ Each PayPal webhook logs one line, `[webhook] type=... signature=ok|failed dupli
 - `lib/seed.ts`, `lib/seed-data.ts`, `scripts/seed.ts` demo state
 - `lib/catalog.ts` product search and search logging
 - `lib/mcp.ts` per-shop MCP server (stateless, JSON responses)
-- `lib/policy.ts`, `lib/quote.ts` deterministic rules and HMAC-signed quotes
+- `lib/policy.ts`, `lib/quote.ts`, `lib/quote-issue.ts`, `lib/negotiate.ts` deterministic rules, HMAC-signed quotes, quote issuing, counter-message drafting
+- `lib/disputes.ts`, `lib/evidence.ts`, `lib/orders-view.ts` disputes, evidence packet, order/dispute read models
 - `lib/orders.ts`, `lib/webhook.ts` checkout, capture, order status, webhook receiver
 - `lib/chat.ts`, `lib/base-url.ts` buyer chat backend, absolute URL helper
 - `lib/config.ts` sim/sandbox mode detection
@@ -113,6 +127,7 @@ Each PayPal webhook logs one line, `[webhook] type=... signature=ok|failed dupli
 - `components/setup/` Setup screen and the editable review grid
 - `components/ui/` Card, Button, Badge, Table, EmptyState, Skeleton, Toast
 - `components/shell/` app shell (sidebar, mobile drawer, theme toggle, mode badges)
+- `components/orders/`, `components/settings/` orders/disputes grids and actions, rules editor
 - `components/catalog/` product cards, card/table catalog view, AG Grid table
 - `tests/` Vitest unit tests
 
@@ -128,7 +143,7 @@ A warm, woven-textile look: linen neutrals, one indigo accent, "thread" colours 
 - [x] Milestone 2a: design foundation, app shell, dashboard, catalog with AG Grid
 - [x] Milestone 2b: signed quotes, checkout, capture, webhooks, order status, buyer chat
 - [x] Milestone 3: multi-shop, anonymous workspaces, URL/CSV ingest with SSRF protection, Setup screen with editable AG Grid, demo shops and sample CSV, chat persistence, rate limits, webhook logging
-- [ ] Milestone 4: negotiation, evidence packet, disputes, `get_product`
+- [x] Milestone 4: negotiation within rules, rules editor, `get_product`, orders and disputes screens, dispute webhooks, evidence packet and submission (sandbox) with a simulated-dispute demo
 
 ## License
 

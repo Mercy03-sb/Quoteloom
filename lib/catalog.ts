@@ -1,4 +1,5 @@
 import type { DB } from "./db";
+import { parseRules } from "./policy";
 
 export type Shop = { id: number; slug: string; name: string; source_url: string | null };
 
@@ -94,5 +95,39 @@ function toResult(p: ProductRow): ProductResult {
     price_cents: p.price_cents,
     currency: p.currency,
     in_stock: p.stock > 0,
+  };
+}
+
+export type ProductDetail = ProductResult & {
+  stock: number;
+  attributes: Record<string, string | number>;
+  quantity_discounts: { min_qty: number; discount_pct: number }[];
+  negotiable: boolean;
+};
+
+/** Attribute keys that are the merchant's private numbers (cost, floor) and never leave the server. */
+const PRIVATE_ATTR = /cost|floor|margin/i;
+
+/** One product with public details only. Merchant cost and floor price are never included. */
+export function getProduct(db: DB, shop: Shop, sku: string): ProductDetail | undefined {
+  const row = db
+    .prepare("SELECT sku, title, description, price_cents, currency, stock, attrs_json FROM products WHERE shop_id = ? AND sku = ?")
+    .get(shop.id, sku) as ProductRow | undefined;
+  if (!row) return undefined;
+  const attributes: Record<string, string | number> = {};
+  try {
+    for (const [k, v] of Object.entries(JSON.parse(row.attrs_json || "{}") as Record<string, unknown>)) {
+      if (!PRIVATE_ATTR.test(k) && (typeof v === "string" || typeof v === "number")) attributes[k] = v;
+    }
+  } catch {
+    /* no attributes */
+  }
+  const rules = parseRules((db.prepare("SELECT rules_json FROM shops WHERE id = ?").get(shop.id) as { rules_json: string }).rules_json);
+  return {
+    ...toResult(row),
+    stock: row.stock,
+    attributes,
+    quantity_discounts: rules.quantity_breaks,
+    negotiable: rules.negotiation,
   };
 }

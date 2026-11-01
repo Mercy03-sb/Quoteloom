@@ -18,10 +18,12 @@ export function openDb(file: string): DB {
   return db;
 }
 
-/** State is disposable: a DB file from before multi-shop support is dropped and rebuilt, not migrated. */
+/** State is disposable: a DB file from before multi-shop or dispute support is dropped and rebuilt, not migrated. */
 function dropStaleSchema(db: DB): void {
   const cols = db.prepare("PRAGMA table_info(shops)").all() as { name: string }[];
-  if (cols.length === 0 || cols.some((c) => c.name === "workspace_id")) return;
+  if (cols.length === 0) return;
+  const dcols = db.prepare("PRAGMA table_info(disputes)").all() as { name: string }[];
+  if (cols.some((c) => c.name === "workspace_id") && dcols.some((c) => c.name === "simulated")) return;
   db.pragma("foreign_keys = OFF");
   for (const t of TABLES) db.exec(`DROP TABLE IF EXISTS ${t}`);
   db.pragma("foreign_keys = ON");

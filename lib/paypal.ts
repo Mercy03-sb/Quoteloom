@@ -245,3 +245,63 @@ export async function verifyWebhook(args: {
     return false;
   }
 }
+
+// ---------- Disputes ----------
+// @paypal/paypal-server-sdk 2.5.0 (checked with the APIMatic Context Plugin) has no Disputes controller,
+// so evidence goes to the documented REST endpoint with plain fetch, like webhook verification above.
+
+export type EvidenceSubmission = { mode: PaypalMode; ok: true; request: unknown; response: unknown };
+
+/**
+ * Submit evidence for a dispute. Simulated disputes, and sim mode, never touch the network but build the
+ * same request body, so the packet-to-API step is exercised either way.
+ */
+export async function submitDisputeEvidence(
+  disputeId: string,
+  body: { evidences: { evidence_type: string; notes: string }[] },
+  opts: { env?: Env; fetchImpl?: typeof fetch; simulated?: boolean } = {},
+): Promise<EvidenceSubmission> {
+  const env = opts.env ?? process.env;
+  if (opts.simulated || paypalMode(env) === "sim") {
+    return { mode: "sim", ok: true, request: { path: `/v1/customer/disputes/${disputeId}/provide-evidence`, body }, response: { simulated: true } };
+  }
+  const f = opts.fetchImpl ?? fetch;
+  const base = "https://api-m.sandbox.paypal.com";
+  try {
+    const tokenRes = await f(`${base}/v1/oauth2/token`, {
+      method: "POST",
+      headers: {
+        authorization: `Basic ${Buffer.from(`${env.PAYPAL_CLIENT_ID}:${env.PAYPAL_CLIENT_SECRET}`).toString("base64")}`,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: "grant_type=client_credentials",
+    });
+    if (!tokenRes.ok) throw new PaypalError(`PayPal sign-in failed (HTTP ${tokenRes.status})`, tokenRes.status);
+    const { access_token } = (await tokenRes.json()) as { access_token?: string };
+    const res = await f(`${base}/v1/customer/disputes/${encodeURIComponent(disputeId)}/provide-evidence`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${access_token}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      let name = "";
+      try {
+        name = (JSON.parse(text) as { name?: string }).name ?? "";
+      } catch {
+        /* not JSON */
+      }
+      throw new PaypalError(`PayPal rejected the evidence (HTTP ${res.status}${name ? `, ${name}` : ""})`, res.status);
+    }
+    let response: unknown = {};
+    try {
+      response = text ? JSON.parse(text) : {};
+    } catch {
+      /* keep empty */
+    }
+    return { mode: "sandbox", ok: true, request: { path: `/v1/customer/disputes/${disputeId}/provide-evidence`, body }, response };
+  } catch (err) {
+    if (err instanceof PaypalError) throw err;
+    throw new PaypalError(`PayPal request failed: ${(err as Error).message}`);
+  }
+}

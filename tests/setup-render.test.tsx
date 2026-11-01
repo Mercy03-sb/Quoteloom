@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ToastProvider } from "@/components/ui";
 import { SetupClient } from "@/components/setup/SetupClient";
-import { gridHeight, GRID_MAX_HEIGHT, GRID_MIN_HEIGHT, HEADER_HEIGHT, ROW_HEIGHT } from "@/components/setup/ReviewGrid";
+import { gridHeight, GRID_MAX_HEIGHT, GRID_MIN_HEIGHT, HEADER_HEIGHT, ROW_HEIGHT, SCROLLBAR_ALLOWANCE } from "@/components/setup/ReviewGrid";
 import { DEMO_STORES, renderDemoShopPage } from "@/lib/demo-shops";
 import { shopNameFrom } from "@/lib/ingest/extract";
 import type { IngestResult } from "@/lib/ingest/pipeline";
@@ -78,7 +78,8 @@ describe("grid sizing", () => {
   it("fits content between a minimum and a maximum", () => {
     expect(gridHeight(0)).toBe(GRID_MIN_HEIGHT);
     expect(gridHeight(1)).toBe(GRID_MIN_HEIGHT);
-    expect(gridHeight(6)).toBe(HEADER_HEIGHT + 6 * ROW_HEIGHT + 2);
+    expect(gridHeight(6)).toBe(HEADER_HEIGHT + 6 * ROW_HEIGHT + 2 + SCROLLBAR_ALLOWANCE);
+    expect(gridHeight(5)).toBeGreaterThanOrEqual(HEADER_HEIGHT + 5 * ROW_HEIGHT + SCROLLBAR_ALLOWANCE); // five rows, no vertical scrollbar
     expect(gridHeight(6)).toBeLessThan(GRID_MAX_HEIGHT);
     expect(gridHeight(200)).toBe(GRID_MAX_HEIGHT);
     expect(gridHeight(8)).toBeGreaterThan(gridHeight(5));

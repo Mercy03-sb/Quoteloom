@@ -2,7 +2,7 @@
 // Every costly endpoint is limited twice: per workspace and per IP.
 
 export type Limit = { max: number; windowMs: number };
-export type Bucket = "ingest" | "publish" | "chat" | "checkout";
+export type Bucket = "ingest" | "publish" | "chat" | "checkout" | "dispute";
 
 /** Per-bucket limits. The IP limit is looser than the workspace one so shared networks still work. */
 export const LIMITS: Record<Bucket, { workspace: Limit; ip: Limit }> = {
@@ -10,6 +10,7 @@ export const LIMITS: Record<Bucket, { workspace: Limit; ip: Limit }> = {
   publish: { workspace: { max: 10, windowMs: 10 * 60_000 }, ip: { max: 20, windowMs: 10 * 60_000 } },
   chat: { workspace: { max: 60, windowMs: 60_000 }, ip: { max: 120, windowMs: 60_000 } },
   checkout: { workspace: { max: 10, windowMs: 60_000 }, ip: { max: 20, windowMs: 60_000 } },
+  dispute: { workspace: { max: 20, windowMs: 60_000 }, ip: { max: 40, windowMs: 60_000 } },
 };
 
 type Window = { start: number; count: number };

@@ -3,7 +3,16 @@ export const DEMO_SHOP = {
   slug: "loom-and-thread",
   name: "Loom & Thread (demo)",
   source_url: null as string | null, // the demo shop is seeded, not ingested
-  rules: { min_margin_pct: 20, max_discount_pct: 15, negotiation: true },
+  rules: {
+    min_margin_pct: 20,
+    max_discount_pct: 15,
+    negotiation: true,
+    max_qty: 20,
+    quantity_breaks: [
+      { min_qty: 5, discount_pct: 5 },
+      { min_qty: 10, discount_pct: 10 },
+    ],
+  },
 };
 
 export type SeedProduct = {

@@ -82,10 +82,11 @@ describe("navigation and stock helpers", () => {
     expect(isActive("/catalog", "/")).toBe(false);
     expect(isActive("/catalog", "/catalog")).toBe(true);
     expect(isActive("/catalogue", "/catalog")).toBe(false);
+    expect(isActive("/disputes/dsp_1", "/orders", ["/disputes"])).toBe(true);
   });
 
   it("only links to real pages, the rest are flagged soon", () => {
-    expect(NAV_ITEMS.filter((i) => !i.soon).map((i) => i.href)).toEqual(["/", "/setup", "/catalog", "/chat"]);
+    expect(NAV_ITEMS.filter((i) => !i.soon).map((i) => i.href)).toEqual(["/", "/setup", "/catalog", "/chat", "/orders", "/settings"]);
   });
 
   it("classifies stock", () => {

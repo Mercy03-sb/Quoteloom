@@ -59,10 +59,10 @@ describe("issueQuote", () => {
     expect(Date.parse(q.expires_at) - now.getTime()).toBe(QUOTE_TTL_MS);
     expect(loadVerifiedQuote(db, shop, q.id, { now, secret: SECRET }).signature).toBe(q.signature);
   });
-  it("ignores a lower offer", () => {
+  it("never goes below the floor for a very low offer", () => {
     const { db, shop } = seededDb();
     const q = issueQuote(db, shop, { sku: "LT-SCARF-WOOL-GRY", qty: 1, offerCents: 100 }, { now, secret: SECRET });
-    expect(q.price_cents).toBe(4800);
+    expect(q.price_cents).toBe(4080); // 15% off 48.00
   });
   it("rejects unknown SKUs and policy violations", () => {
     const { db, shop } = seededDb();

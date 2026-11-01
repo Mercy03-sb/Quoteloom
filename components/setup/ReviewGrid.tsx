@@ -12,12 +12,13 @@ type Ctx = { onDelete: (id: string) => void };
 
 export const ROW_HEIGHT = 46;
 export const HEADER_HEIGHT = 44;
+export const SCROLLBAR_ALLOWANCE = 18; // a horizontal scrollbar on narrow screens must not steal row space
 export const GRID_MIN_HEIGHT = 200; // room for the "no rows" message
 export const GRID_MAX_HEIGHT = 520; // taller drafts scroll inside the grid
 
 /** Grid height that fits its rows: header + rows (+ border), clamped to a sensible minimum and maximum. */
 export function gridHeight(rowCount: number): number {
-  return Math.min(GRID_MAX_HEIGHT, Math.max(GRID_MIN_HEIGHT, HEADER_HEIGHT + rowCount * ROW_HEIGHT + 2));
+  return Math.min(GRID_MAX_HEIGHT, Math.max(GRID_MIN_HEIGHT, HEADER_HEIGHT + rowCount * ROW_HEIGHT + 2 + SCROLLBAR_ALLOWANCE));
 }
 
 function DeleteCell(props: CustomCellRendererProps<DraftRow, unknown, Ctx>) {
@@ -48,7 +49,7 @@ export function ReviewGrid({ rows, onChange, onDelete }: { rows: DraftRow[]; onC
 
   const columnDefs = useMemo<ColDef<DraftRow>[]>(
     () => [
-      { field: "sku", headerName: "SKU", editable: true, flex: 1.2, minWidth: 110, cellClassRules: { "cell-bad": bad("sku") }, cellStyle: { fontFamily: "var(--f-mono)", fontSize: 13 } },
+      { field: "sku", headerName: "SKU", editable: true, flex: 1.6, minWidth: 150, tooltipField: "sku", cellClassRules: { "cell-bad": bad("sku") }, cellStyle: { fontFamily: "var(--f-mono)", fontSize: 13 } },
       { field: "title", headerName: "Product", editable: true, flex: 2, minWidth: 150, cellClassRules: { "cell-bad": bad("title") } },
       { field: "description", headerName: "Description", editable: true, flex: 2.2, minWidth: 130 },
       {
@@ -72,8 +73,8 @@ export function ReviewGrid({ rows, onChange, onDelete }: { rows: DraftRow[]; onC
         headerName: "Stock",
         editable: true,
         type: "rightAligned",
-        flex: 0.7,
-        minWidth: 76,
+        flex: 0.8,
+        minWidth: 92,
         valueParser: (p) => (String(p.newValue).trim() === "" ? NaN : Number(p.newValue)),
         cellClassRules: { "cell-bad": bad("stock") },
       },
@@ -103,11 +104,12 @@ export function ReviewGrid({ rows, onChange, onDelete }: { rows: DraftRow[]; onC
         rowData={rows}
         columnDefs={columnDefs}
         context={{ onDelete } satisfies Ctx}
-        defaultColDef={{ sortable: true, resizable: true, suppressHeaderMenuButton: true }}
+        defaultColDef={{ sortable: false, resizable: true, suppressHeaderMenuButton: true }}
         rowHeight={ROW_HEIGHT}
         headerHeight={HEADER_HEIGHT}
         getRowId={(p) => p.data._id}
         singleClickEdit
+        tooltipShowDelay={400}
         stopEditingWhenCellsLoseFocus
         onCellValueChanged={(e) => e.data && onChange({ ...e.data })}
         overlayNoRowsTemplate="No products left. Add a row or start over."

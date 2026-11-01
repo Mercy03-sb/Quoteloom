@@ -1,6 +1,7 @@
 // PayPal webhook receiver logic. Signature first, then dedupe by event id, then a status update.
 import { createHmac } from "node:crypto";
 import type { DB } from "./db";
+import { handleDisputeEvent } from "./disputes";
 import { findOrderByPaypalId, logEvent, loadOrder, setStatus, type OrderStatus } from "./orders";
 import { SIM_SIGNATURE_HEADER, simWebhookSignature, valueToCents, verifyWebhook, type WebhookHeaders } from "./paypal";
 import { signingSecret } from "./quote";
@@ -79,6 +80,13 @@ export async function handlePaypalWebhook(
     logEvent(db, "webhook.duplicate", { id: event.id, event_type: event.event_type, order_id: dupOrder?.id ?? null });
     logWebhookLine(event.event_type, true, true);
     return { status: 200, body: { received: true, duplicate: true } };
+  }
+
+  if (event.event_type.startsWith("CUSTOMER.DISPUTE.")) {
+    const d = handleDisputeEvent(db, event.event_type, (event.resource ?? {}) as Parameters<typeof handleDisputeEvent>[2]);
+    logEvent(db, "webhook", { id: event.id, event_type: event.event_type, order_id: d.orderId, outcome: d.outcome, signature: "valid" });
+    logWebhookLine(event.event_type, true, false);
+    return { status: 200, body: { received: true, outcome: d.outcome } };
   }
 
   const res = event.resource ?? {};

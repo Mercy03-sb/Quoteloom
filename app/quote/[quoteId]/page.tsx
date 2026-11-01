@@ -89,7 +89,11 @@ export default async function QuotePage({ params }: { params: Promise<{ quoteId:
                       <br />
                       {e.type === "request"
                         ? `${e.qty} x ${e.sku}${e.offer_cents ? `, offered ${formatCents(Number(e.offer_cents))}` : ""}`
-                        : String(e.note ?? "")}
+                        : e.type === "offer_history"
+                          ? `Round ${String(e.round)}; earlier offers: ${((e.prior as { offer_cents: number }[]) ?? []).map((p) => formatCents(p.offer_cents)).join(", ")}`
+                          : e.type === "message"
+                            ? `“${String(e.text)}” (${String(e.source)} wording)`
+                            : String(e.note ?? "")}
                     </span>
                   </li>
                 );

@@ -2,12 +2,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import { resolveBaseUrl } from "./base-url";
-import { searchProducts, type Shop } from "./catalog";
+import { getProduct, searchProducts, type Shop } from "./catalog";
 import type { DB } from "./db";
 import { createCheckout, getOrderStatus, OrderError } from "./orders";
 import { PaypalError } from "./paypal";
 import { PolicyError } from "./policy";
-import { issueQuote, QuoteError } from "./quote";
+import { issueQuoteDrafted, QuoteError } from "./quote";
 
 const money = (cents: number) => (cents / 100).toFixed(2);
 
@@ -50,22 +50,39 @@ export function buildShopServer(db: DB, shop: Shop, agentId: string | null, base
   );
 
   server.registerTool(
+    "get_product",
+    {
+      title: "Get one product",
+      description: `Full details of one ${shop.name} product by SKU: description, attributes, price, stock and the shop's quantity discounts. Use request_quote to buy.`,
+      inputSchema: { sku: z.string().min(1).max(80).describe("SKU from search_products.") },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async ({ sku }) => {
+      const p = getProduct(db, shop, sku);
+      if (!p) return { ...ok({ error: "unknown_sku", message: `No product with SKU ${sku}.` }), isError: true };
+      return ok({ shop: shop.slug, product: p });
+    },
+  );
+
+  server.registerTool(
     "request_quote",
     {
       title: "Request a signed quote",
       description:
         "Get a price commitment for a SKU and quantity. The shop's rules set the price, not the caller. " +
+        "You may add offer_price (per unit) to negotiate: the shop accepts it, counters with the best price it can do, or " +
+        "declines to negotiate, always within its own limits. Quantity discounts may apply. " +
         "The quote is signed and valid for 10 minutes; pass quote_id to create_checkout to buy it.",
       inputSchema: {
         sku: z.string().min(1).max(80).describe("SKU from search_products."),
         qty: z.number().int().min(1).max(1000).describe("Quantity (whole number)."),
-        offer_price: z.number().positive().optional().describe("Optional unit price you would like. Not negotiable yet: quoted at list price."),
+        offer_price: z.number().positive().optional().describe("Optional unit price you would like to pay (decimal, in the product currency). The shop decides within its rules."),
       },
       annotations: { readOnlyHint: false, openWorldHint: false },
     },
     async ({ sku, qty, offer_price }) => {
       try {
-        const q = issueQuote(db, shop, {
+        const q = await issueQuoteDrafted(db, shop, {
           sku,
           qty,
           offerCents: offer_price === undefined ? undefined : Math.round(offer_price * 100),
@@ -81,7 +98,13 @@ export function buildShopServer(db: DB, shop: Shop, agentId: string | null, base
           currency: q.currency,
           expires_at: q.expires_at,
           signature: q.signature,
-          message: q.note,
+          negotiation: {
+            outcome: q.outcome,
+            list_price: money(q.list_price_cents),
+            offered: offer_price === undefined ? null : money(Math.round(offer_price * 100)),
+            final_unit_price: money(q.price_cents),
+          },
+          message: q.message,
         });
       } catch (err) {
         return fail(err);

@@ -200,7 +200,7 @@ export function SetupClient({ shopCount, maxShops }: { shopCount: number; maxSho
     return (
       <div className="stack-lg">
         <Card>
-          <div className="card-head">
+          <div className="card-head card-head-tight">
             <h3>Review your draft catalog</h3>
             <div className="row">
               <Badge tone="accent">{rows.length} product{rows.length === 1 ? "" : "s"}</Badge>
@@ -210,7 +210,7 @@ export function SetupClient({ shopCount, maxShops }: { shopCount: number; maxSho
               {result.methods.rules > 0 && <Badge>{result.methods.rules} via rule-based parser</Badge>}
             </div>
           </div>
-          <p className="stat-note" style={{ marginBottom: "var(--sp-3)" }}>
+          <p className="stat-note" style={{ margin: 0, marginBottom: "var(--sp-2)" }}>
             Click any cell to edit. Prices are shown in major units (12.50). Outlined cells need fixing before you can publish.
           </p>
           {result.warnings.map((w) => (

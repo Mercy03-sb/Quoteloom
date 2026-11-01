@@ -56,7 +56,7 @@ export function AppShell({ badges, children }: { badges: ReactNode; children: Re
                   key={item.href}
                   href={item.href}
                   className="nav-link"
-                  aria-current={isActive(pathname, item.href) ? "page" : undefined}
+                  aria-current={isActive(pathname, item.href, item.also) ? "page" : undefined}
                 >
                   {item.label}
                 </Link>
