@@ -1,13 +1,13 @@
 import { formatCents } from "@/lib/catalog";
-import { threadFor } from "@/lib/design/tokens";
+import { weaveFor, weaveStyle } from "@/lib/design/weave";
 import { Badge } from "@/components/ui";
 import { stockLabel, stockTone, type CatalogRow } from "./types";
 
 export function ProductCard({ product }: { product: CatalogRow }) {
-  const thread = threadFor(product.sku);
+  const swatch = weaveStyle(weaveFor(product));
   return (
     <article className="product">
-      <div className="product-swatch weave" style={{ ["--weave" as string]: `var(--c-thread-${thread})` }} aria-hidden="true" />
+      <div className="product-swatch" style={swatch} aria-hidden="true" />
       <div className="product-body">
         <h3 className="product-title">{product.title}</h3>
         <p className="product-desc">{product.description}</p>

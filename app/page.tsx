@@ -1,14 +1,16 @@
+import { headers } from "next/headers";
 import Link from "next/link";
 import { CopyButton } from "@/components/catalog/CopyButton";
 import { ProductCard } from "@/components/catalog/ProductCard";
 import { Badge, Card, EmptyState } from "@/components/ui";
 import { formatCents } from "@/lib/catalog";
+import { mcpUrl, resolveBaseUrl } from "@/lib/base-url";
 import { getShopStats } from "@/lib/dashboard";
 import { loadPrimaryShop } from "@/lib/shop-view";
 
 export const dynamic = "force-dynamic";
 
-export default function Dashboard() {
+export default async function Dashboard() {
   const data = loadPrimaryShop();
   if (!data) {
     return (
@@ -21,14 +23,13 @@ export default function Dashboard() {
   }
   const { shop, rows, db } = data;
   const stats = getShopStats(db, shop.id);
-  const endpoint = `/m/${shop.slug}/mcp`;
+  const endpoint = mcpUrl(resolveBaseUrl(await headers()), shop.slug);
 
   return (
     <div className="page">
       <Card hero>
         <div className="row" style={{ marginBottom: "var(--sp-3)" }}>
           <Badge tone="accent">Your storefront</Badge>
-          {shop.source_url && <Badge>{shop.source_url}</Badge>}
         </div>
         <h1>{shop.name}</h1>
         <p style={{ color: "var(--c-text-muted)", margin: "var(--sp-2) 0 var(--sp-5)", maxWidth: "58ch" }}>

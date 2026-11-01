@@ -5,6 +5,8 @@ export type CatalogRow = {
   price_cents: number;
   currency: string;
   stock: number;
+  /** Display-only attributes (material, colour). Never margin or cost data. */
+  attrs?: { material?: string; color?: string };
 };
 
 export function stockTone(stock: number): "danger" | "warning" | "success" {

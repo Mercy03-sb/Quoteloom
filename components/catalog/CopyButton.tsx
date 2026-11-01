@@ -6,7 +6,7 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
   const toast = useToast();
   async function copy() {
     try {
-      await navigator.clipboard.writeText(text.startsWith("/") ? `${location.origin}${text}` : text);
+      await navigator.clipboard.writeText(text);
       toast("Copied to clipboard", "success");
     } catch {
       toast("Could not copy. Select the text and copy it manually.", "danger");

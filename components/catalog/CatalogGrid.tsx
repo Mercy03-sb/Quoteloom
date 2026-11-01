@@ -52,7 +52,7 @@ export function CatalogGrid({ rows }: { rows: CatalogRow[] }) {
         theme={quoteloomGridTheme}
         rowData={rows}
         columnDefs={columnDefs}
-        defaultColDef={{ sortable: true, filter: true, resizable: true }}
+        defaultColDef={{ sortable: true, filter: true, resizable: true, suppressHeaderMenuButton: true }}
         getRowId={(p) => p.data.sku}
         overlayNoRowsTemplate="No products match this filter."
         pagination={rows.length > 25}

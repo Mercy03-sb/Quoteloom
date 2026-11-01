@@ -7,13 +7,12 @@ export function loadPrimaryShop(): { shop: Shop; rows: CatalogRow[]; db: DB } | 
   const db = getDb();
   const shop = db.prepare("SELECT id, slug, name, source_url FROM shops ORDER BY id LIMIT 1").get() as Shop | undefined;
   if (!shop) return null;
-  const rows = listProducts(db, shop.id).map(({ sku, title, description, price_cents, currency, stock }) => ({
-    sku,
-    title,
-    description,
-    price_cents,
-    currency,
-    stock,
-  }));
+  const rows = listProducts(db, shop.id).map(({ sku, title, description, price_cents, currency, stock, attrs_json }) => {
+    const a = JSON.parse(attrs_json || "{}") as Record<string, unknown>;
+    const attrs: CatalogRow["attrs"] = {};
+    if (typeof a.material === "string") attrs.material = a.material;
+    if (typeof a.color === "string") attrs.color = a.color;
+    return { sku, title, description, price_cents, currency, stock, attrs };
+  });
   return { shop, rows, db };
 }

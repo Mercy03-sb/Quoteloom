@@ -18,3 +18,8 @@ export function llmMode(env: Env = process.env): LlmMode {
 export function databasePath(env: Env = process.env): string {
   return env.DATABASE_PATH || "data/quoteloom.db";
 }
+
+/** Dev-only routes (e.g. /api/dev/paypal-test) are off in production unless ALLOW_DEV_ROUTES=1. */
+export function devRoutesEnabled(env: Env = process.env): boolean {
+  return env.NODE_ENV !== "production" || env.ALLOW_DEV_ROUTES === "1";
+}

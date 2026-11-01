@@ -1,4 +1,4 @@
-import { paypalMode } from "@/lib/config";
+import { devRoutesEnabled, paypalMode } from "@/lib/config";
 import { createOrder, PaypalError } from "@/lib/paypal";
 
 export const runtime = "nodejs";
@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 
 // Dev check: creates a PayPal sandbox order (or a simulated one) and returns the approval link.
 export async function GET(req: Request): Promise<Response> {
+  if (!devRoutesEnabled()) return new Response("Not found", { status: 404 });
   const origin = new URL(req.url).origin;
   try {
     const order = await createOrder({

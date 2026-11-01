@@ -14,7 +14,11 @@ Paste a small shop's URL (or upload a CSV). Quoteloom builds an agent-ready stor
 - DONE: Milestone 1b code: `render.yaml`, `engines` Node 22, `lib/paypal.ts` (sandbox order via APIMatic Context Plugin, sim fallback), `/api/dev/paypal-test`, 24 tests passing.
 - TODO (manual, needs accounts): deploy the blueprint on Render, set sandbox creds, hit `/api/dev/paypal-test` for a real sandbox link, and test the Render MCP URL as a custom connector in Claude Desktop.
 - DONE: Milestone 2a, design foundation: `lib/design/tokens.ts` (colours, type scale, spacing, radii, light/dark), app shell with sidebar and mobile drawer, Card/Button/Badge/Table/EmptyState/Skeleton/Toast in `components/ui/`, Simulation/Sandbox badge, dashboard at `/` (shop hero, stats, featured products), `/catalog` with a Cards/Table toggle (AG Grid Community, themed from the tokens), loading/error/not-found states. Fonts self-hosted via `@fontsource-variable` (Fraunces + Hanken Grotesk). New deps: `ag-grid-community`, `ag-grid-react`, two fontsource packages (no accounts). 43 tests passing, build passing. Not yet checked by eye on a real phone/browser.
-- NEXT: Milestone 2b: signed quotes (`lib/quote.ts`), policy (`lib/policy.ts`), checkout, capture, webhook receiver, order status, buyer chat and checkout screens. Nav items for later screens are shown as disabled "Soon" entries in `components/shell/nav.ts`; make them real as each ships.
+- DONE: 2a review fixes: hero shows the absolute MCP URL (request host, else `NEXT_PUBLIC_BASE_URL`), Copy URL copies it, per-product woven pattern and colour (`lib/design/weave.ts`), one filter icon per AG Grid column, sidebar note wraps.
+- DONE: Milestone 2b: `lib/policy.ts` (rules parsed, quantity/stock checks, list price only, no negotiation), `lib/quote.ts` (HMAC-SHA256, 10 min expiry, quote id is the nonce, `QUOTE_SIGNING_SECRET` or random per-process secret), `lib/orders.ts` (create checkout, capture, forward-only status), `lib/webhook.ts` + `POST /api/webhooks/paypal` (signature verified: PayPal verify API in sandbox, HMAC in sim; dedupe by event id), `captureOrder`/`verifyWebhook` in `lib/paypal.ts`. MCP tools `request_quote`, `create_checkout`, `get_order_status`. Screens: `/chat`, `/quote/{id}`, `/checkout/{order}`. `/api/dev/*` is 404 in production unless `ALLOW_DEV_ROUTES=1`. 112 tests passing, build passing, sim flow smoke-tested against the production build. Not yet checked by eye in a browser or phone; sandbox capture and webhook verification are only tested against stubs.
+- Known limits: stock is taken on payment, not reserved at checkout, so two buyers can race (the later capture is blocked only by a pre-capture stock check); one order per quote; `get_product` MCP tool not built yet; `source_url` on the demo shop is null until URL ingest (M3).
+- TODO (manual): in the PayPal sandbox dashboard create a webhook pointing at `{render-url}/api/webhooks/paypal` (events: CHECKOUT.ORDER.APPROVED, PAYMENT.CAPTURE.*) and set `PAYPAL_WEBHOOK_ID` on Render; run one real sandbox purchase end to end.
+- NEXT: Milestone 3 (ingest, catalog editor, Setup screen). Nav items for later screens are disabled "Soon" entries in `components/shell/nav.ts`.
 
 ## Hard constraints
 
@@ -111,7 +115,7 @@ Rule: every milestone ships its screens at demo quality, not just the backend. N
 
 - M1 (core DONE, commit 48cf614): SQLite seed, demo shop, MCP search tool, tests, sim mode.
 - M1b: Render deploy, PayPal sandbox order via APIMatic Context Plugin, MCP tool tested from Claude Desktop through the Render URL.
-- M2: design foundation (see UI and design), signed quotes, checkout, capture, webhook receiver, order status, with the buyer chat and checkout screens at demo quality.
+- M2 (DONE 2a + 2b): design foundation (see UI and design), signed quotes, checkout, capture, webhook receiver, order status, with the buyer chat and checkout screens at demo quality.
 - M3: ingest from URL/CSV, catalog editor (AG Grid), Setup screen at demo quality.
 - M4: negotiation within rules, evidence packet, dispute submit, orders and disputes screens at demo quality.
 - M5: AG Studio dashboard + Agent Framework, Channel3 integration with snapshot fallback, full visual polish pass (states, theme, mobile), hardening (no-key run, cold start, Gemini failure, PayPal failure, Channel3 failure, Studio license failure).
