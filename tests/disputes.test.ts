@@ -26,19 +26,19 @@ async function paidOrder(offerCents?: number) {
 
 describe("evidence packet", () => {
   it("contains the request, negotiation, signed quote with validity, order and capture, and timestamps", async () => {
-    const { db, orderId, q } = await paidOrder(4300);
+    const { db, orderId, q } = await paidOrder(4700);
     const d = simulateDispute(db, orderId);
     const p = getEvidence(loadDispute(db, d.id)!)!;
     expect(p.simulated).toBe(true);
     expect(p.dispute).toMatchObject({ order_id: orderId, reason: "UNAUTHORISED", simulated: true });
-    expect(p.buyer_request).toMatchObject({ sku: "LT-SCARF-WOOL-GRY", qty: 2, offer_price_cents: 4300, agent: "test-agent" });
+    expect(p.buyer_request).toMatchObject({ sku: "LT-SCARF-WOOL-GRY", qty: 2, offer_price_cents: 4700, agent: "test-agent" });
     expect(p.negotiation.outcome).toBe("accepted");
     expect(p.negotiation.offers).toHaveLength(1);
     expect(p.negotiation.reasons.length).toBeGreaterThan(0);
     expect(p.negotiation.transcript.map((e) => e.type)).toEqual(["request", "decision", "message"]);
     expect(p.negotiation.message).toBeTruthy();
-    expect(p.quote).toMatchObject({ id: q.id, unit_price_cents: 4300, list_price_cents: 4800, total_cents: 8600, signature: q.signature, signature_intact: true, valid_when_ordered: true });
-    expect(p.order).toMatchObject({ id: orderId, status: "PAID", amount_cents: 8600 });
+    expect(p.quote).toMatchObject({ id: q.id, unit_price_cents: 4700, list_price_cents: 4800, total_cents: 9400, signature: q.signature, signature_intact: true, valid_when_ordered: true });
+    expect(p.order).toMatchObject({ id: orderId, status: "PAID", amount_cents: 9400 });
     expect(p.order.capture_id).toBe(captureIdFor(db, orderId));
     expect(p.order.capture_id).toMatch(/^SIMCAP-/);
     expect(p.order.captured_at).toBeTruthy();
@@ -68,14 +68,14 @@ describe("evidence packet", () => {
   });
 
   it("builds the PayPal request body with the key facts, within the 2000 character limit", async () => {
-    const { db, orderId } = await paidOrder(4300);
+    const { db, orderId } = await paidOrder(4700);
     const p = getEvidence(simulateDispute(db, orderId))!;
     const body = provideEvidenceBody(p);
     expect(body.evidences).toHaveLength(1);
     const notes = body.evidences[0].notes;
     expect(notes).toContain("SIMULATED DISPUTE");
     expect(notes).toContain(p.quote.id);
-    expect(notes).toContain("43.00");
+    expect(notes).toContain("47.00");
     expect(notes).toContain("Signature intact: yes");
     expect(notes.length).toBeLessThanOrEqual(2000);
     expect(evidenceNotes({ ...p, simulated: false })).not.toContain("SIMULATED");
@@ -169,7 +169,7 @@ describe("dispute webhooks", () => {
   });
 
   it("stores a verified dispute with its packet, matched to the order by capture id, and dedupes by event id", async () => {
-    const { db, orderId } = await paidOrder(4300);
+    const { db, orderId } = await paidOrder(4700);
     const ev = created("D-2", captureIdFor(db, orderId));
     const first = await send(db, ev);
     expect(first).toMatchObject({ status: 200, body: { outcome: "dispute_stored" } });
@@ -178,7 +178,7 @@ describe("dispute webhooks", () => {
     expect(rows[0]).toMatchObject({ order_id: orderId, paypal_dispute_id: "PP-D-77", status: "OPEN", simulated: 0, amount_cents: 8600 });
     const packet = getEvidence(loadDispute(db, rows[0].id)!)!;
     expect(packet.simulated).toBe(false);
-    expect(packet.quote.unit_price_cents).toBe(4300);
+    expect(packet.quote.unit_price_cents).toBe(4700);
 
     const again = await send(db, ev);
     expect(again.body).toMatchObject({ duplicate: true });
@@ -209,10 +209,10 @@ describe("dispute webhooks", () => {
 
 describe("orders view", () => {
   it("lists orders with negotiation info and respects workspace visibility", async () => {
-    const { db, orderId } = await paidOrder(4300);
+    const { db, orderId } = await paidOrder(4700);
     const rows = listOrders(db, visibleShopIds(db, null));
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ id: orderId, negotiated: true, list_price_cents: 4800, unit_price_cents: 4300, qty: 2, status: "PAID", disputes: 0 });
+    expect(rows[0]).toMatchObject({ id: orderId, negotiated: true, list_price_cents: 4800, unit_price_cents: 4700, qty: 2, status: "PAID", disputes: 0 });
     expect(visibleOrder(db, null, orderId)?.id).toBe(orderId);
     expect(listOrders(db, [])).toEqual([]);
     expect(visibleOrder(db, null, "nope")).toBeUndefined();

@@ -19,11 +19,11 @@ describe("chat quote action with an offer", () => {
     expect(out.isError).toBe(false);
     const r = out.result;
     expect(r.negotiation).toMatchObject({ outcome: "countered", offered: "10.00" });
-    expect(r.unit_price).toBe("40.80");
+    expect(r.unit_price).toBe("46.64");
     expect(r.list_price).toBe("48.00");
     expect(r.quantity_discounts).toHaveLength(2);
     expect(JSON.stringify(r)).not.toMatch(/floor|margin|cost/i); // merchant limits stay private
-    expect(r.negotiation.reasons.join(" ")).toContain("best price it can do is 40.80");
+    expect(r.negotiation.reasons.join(" ")).toContain("best it can do right now is 46.64");
   });
 
   it("rejects a bad offer and still works with no offer", async () => {

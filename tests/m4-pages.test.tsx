@@ -57,12 +57,12 @@ describe("orders pages render", () => {
   });
 
   it("order detail shows price, negotiation outcome, audit trail and the simulate button", async () => {
-    const { orderId } = await seedPaid(4300);
+    const { orderId } = await seedPaid(4700);
     const out = html(await OrderDetailPage(idp(orderId)));
     expect(out).toContain(orderId);
     expect(out).toContain("PAID");
     expect(out).toContain("Negotiation");
-    expect(out).toContain("43.00");
+    expect(out).toContain("47.00");
     expect(out).toContain("accepted");
     expect(out).toContain("Audit trail");
     expect(out).toContain("Simulate dispute");
@@ -98,7 +98,7 @@ describe("disputes pages render", () => {
   });
 
   it("dispute detail shows the labelled simulation, every packet section and the approve button", async () => {
-    const { db, orderId, quoteId } = await seedPaid(4300);
+    const { db, orderId, quoteId } = await seedPaid(4700);
     const d = simulateDispute(db, orderId);
     const out = html(await DisputeDetailPage(idp(d.id)));
     for (const s of ["Simulated", "Checks", "Buyer request", "Negotiation transcript", "Signed quote", "Order and capture", "Timeline", "Approval"]) expect(out).toContain(s);

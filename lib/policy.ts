@@ -130,17 +130,21 @@ export function checkQuantity(qty: number, stock: number, rules: ShopRules): voi
 export type Outcome =
   | "list_price" // no offer, no break: list price
   | "quantity_break" // no usable offer; the break price applies
-  | "accepted" // the offer was at or above the floor and below the standing price
-  | "countered" // the offer was below the floor; we name the best price we can do
+  | "accepted" // the offer was at or above the current ask: accepted at the offered price
+  | "countered" // the offer was below the ask; the counter is the ask ("best I can do right now")
+  | "final_price" // the last round (or later): the ask is the final price
   | "negotiation_off"
-  | "offer_not_lower" // the offer was at or above the standing price
-  | "round_limit"; // too many rounds: no further concessions
+  | "offer_not_lower"; // the offer was at or above the standing (list or quantity-break) price
 
+/** Rounds in a negotiation. Round MAX_ROUNDS is the only one that is final. */
 export const MAX_ROUNDS = 5;
+
+/** The final price sits this share of the room (standing minus floor) above the floor. */
+export const FINAL_ABOVE_FLOOR_SHARE = 0.05;
 
 export type PriceDecision = {
   unitPriceCents: number;
-  negotiated: boolean; // true when the final price came from the buyer's offer or a counter, not just list/break
+  negotiated: boolean; // true when the price came from an offer or counter, not just list/break
   outcome: Outcome;
   note: string; // template wording of the decision (an LLM may rephrase it, the price stays)
   reasons: string[]; // each deterministic step, for the merchant (mentions the floor)
@@ -149,7 +153,9 @@ export type PriceDecision = {
   breakPriceCents: number;
   floorCents: number;
   offerCents: number | null;
-  round: number;
+  round: number; // 1-based round within this agent, SKU and quantity tier
+  askCents: number | null; // the seller's ask this round (null when there was no offer)
+  isFinal: boolean; // true only when this answer is the final price
 };
 
 const dollars = (c: number) => (c / 100).toFixed(2);
@@ -186,13 +192,30 @@ export function breakDiscountPct(qty: number, rules: ShopRules): number {
   return p;
 }
 
+/** The price the last round settles on: a little above the floor, never above the standing price. */
+export function finalPriceCents(standingCents: number, floorCents: number): number {
+  const room = Math.max(0, standingCents - floorCents);
+  return Math.min(standingCents, floorCents + Math.ceil(room * FINAL_ABOVE_FLOOR_SHARE));
+}
+
 /**
- * Decide the unit price. Deterministic. Order of reasoning:
- * 1. start from list; a quantity break lowers the standing price (never below the floor);
- * 2. no offer, or negotiation off: the standing price;
- * 3. an offer at or above the standing price changes nothing; an offer at or above the floor is accepted;
- *    an offer below the floor gets a counter at the midpoint to the standing price, never below the floor;
- * 4. once the same agent has had MAX_ROUNDS answers for this SKU, the best price already given is final.
+ * The seller's ask for round n (1..MAX_ROUNDS): standing minus (standing - final) x n / MAX_ROUNDS, rounded so the
+ * ask never drops below the final price. Non-increasing in n, whatever anyone offers.
+ */
+export function askForRound(standingCents: number, floorCents: number, round: number): number {
+  const final = finalPriceCents(standingCents, floorCents);
+  const n = Math.min(Math.max(1, round), MAX_ROUNDS);
+  return standingCents - Math.floor(((standingCents - final) * n) / MAX_ROUNDS);
+}
+
+/**
+ * Decide the unit price. Deterministic; the buyer's offer never moves the seller's ask.
+ * 1. Start from list; a quantity break lowers the standing price (never below the floor).
+ * 2. No offer, or negotiation off: the standing price.
+ * 3. An offer is a round for this agent, SKU and quantity tier. The ask for round n is the schedule
+ *    askForRound(n), and never above any earlier ask in this tier.
+ * 4. An offer at or above the ask is accepted at the offered price (capped at the standing price).
+ *    A lower offer gets the ask as the counter. Only round MAX_ROUNDS and later is worded as final.
  */
 export function decideUnitPrice(input: {
   listPriceCents: number;
@@ -201,14 +224,12 @@ export function decideUnitPrice(input: {
   costCents?: number | null;
   floorCents?: number | null;
   rules: ShopRules;
-  /** Answers this agent already got for this SKU (offer history), oldest first. */
-  priorOffers?: { offerCents: number | null; unitPriceCents: number }[];
+  /** Earlier answers to this agent for this SKU, oldest first. Only entries in the same quantity tier count. */
+  priorOffers?: { offerCents: number | null; unitPriceCents: number; askCents?: number | null; tierPriceCents?: number | null }[];
 }): PriceDecision {
   const { listPriceCents, rules } = input;
   const qty = input.qty ?? 1;
   const offer = input.offerCents ?? null;
-  const prior = input.priorOffers ?? [];
-  const round = prior.length + 1;
   const reasons: string[] = [];
   const pub: string[] = [];
   const { floorCents, why } = floorPriceCents({ listPriceCents, costCents: input.costCents, floorCents: input.floorCents, rules });
@@ -221,8 +242,12 @@ export function decideUnitPrice(input: {
     pub.push(`Quantity discount: ${brk}% off for ${qty} or more, giving ${dollars(standing)} per unit.`);
   }
   reasons.push(`Floor is ${dollars(floorCents)} (${why}).`);
+
+  // Earlier rounds in the same quantity tier (entries without a tier are from the same tier by construction).
+  const prior = (input.priorOffers ?? []).filter((p) => p.tierPriceCents == null || p.tierPriceCents === standing);
+  const round = offer === null ? prior.length : prior.length + 1;
   const base = { listPriceCents, breakPriceCents: standing, floorCents, offerCents: offer, round };
-  const done = (unit: number, outcome: Outcome, negotiated: boolean, note: string): PriceDecision => ({
+  const done = (unit: number, outcome: Outcome, negotiated: boolean, note: string, ask: number | null = null, isFinal = false): PriceDecision => ({
     ...base,
     unitPriceCents: unit,
     outcome,
@@ -230,6 +255,8 @@ export function decideUnitPrice(input: {
     note,
     reasons,
     publicReasons: pub,
+    askCents: ask,
+    isFinal,
   });
 
   if (offer === null) {
@@ -242,27 +269,32 @@ export function decideUnitPrice(input: {
     pub.push("This shop does not negotiate, so your offer was not considered.");
     return done(standing, "negotiation_off", false, `This shop does not negotiate. The price is ${dollars(standing)} per unit.`);
   }
-  if (offer >= standing) {
-    reasons.push(`Offer ${dollars(offer)} is not below the standing price ${dollars(standing)}; no discount needed.`);
-    pub.push(`Your offer of ${dollars(offer)} is not below the current price of ${dollars(standing)}, so no discount applies.`);
-    return done(standing, "offer_not_lower", false, `Your offer is not below the current price, so the price stays ${dollars(standing)} per unit.`);
-  }
-  if (prior.length >= MAX_ROUNDS) {
-    const best = Math.min(standing, ...prior.map((p) => p.unitPriceCents));
-    reasons.push(`Round limit of ${MAX_ROUNDS} reached; the best price already given (${dollars(best)}) is final.`);
-    pub.push(`The negotiation limit was reached, so ${dollars(best)} per unit is final.`);
-    return done(best, "round_limit", true, `We have reached the end of negotiation. Our final price is ${dollars(best)} per unit.`);
-  }
-  if (offer >= floorCents) {
-    reasons.push(`Offer ${dollars(offer)} is at or above the floor ${dollars(floorCents)}: accepted.`);
-    pub.push(`Your offer of ${dollars(offer)} is within what the shop can accept.`);
-    return done(offer, "accepted", true, `Offer accepted at ${dollars(offer)} per unit.`);
-  }
-  const mid = Math.ceil((offer + standing) / 2);
-  const counter = Math.min(standing, Math.max(floorCents, mid));
+
+  // The ask depends only on the round and the standing price: never on the offer. It also never rises above an earlier ask.
+  const earlier = prior.map((p) => p.askCents ?? p.unitPriceCents).filter((a) => Number.isFinite(a));
+  const scheduled = askForRound(standing, floorCents, round);
+  const ask = Math.min(scheduled, standing, ...earlier);
+  const isFinal = round >= MAX_ROUNDS;
   reasons.push(
-    `Offer ${dollars(offer)} is below the floor ${dollars(floorCents)}. Counter: midpoint ${dollars(mid)}, held at or above the floor, gives ${dollars(counter)}.`,
+    `Round ${round} of ${MAX_ROUNDS}: ask ${dollars(ask)} (schedule ${dollars(scheduled)}, final price ${dollars(finalPriceCents(standing, floorCents))}). The ask does not depend on the offer.`,
   );
-  pub.push(`Your offer of ${dollars(offer)} is lower than the shop can accept. The best price it can do is ${dollars(counter)} per unit.`);
-  return done(counter, "countered", true, `We cannot go as low as ${dollars(offer)}. The best we can do is ${dollars(counter)} per unit.`);
+
+  if (offer >= standing) {
+    reasons.push(`Offer ${dollars(offer)} is not below the standing price ${dollars(standing)}; charged ${dollars(standing)}.`);
+    pub.push(`Your offer of ${dollars(offer)} is not below the current price of ${dollars(standing)}, so no discount applies.`);
+    return done(standing, "offer_not_lower", false, `Your offer is not below the current price, so the price stays ${dollars(standing)} per unit.`, ask, false);
+  }
+  if (offer >= ask) {
+    reasons.push(`Offer ${dollars(offer)} is at or above the ask ${dollars(ask)}: accepted at the offered price.`);
+    pub.push(`Your offer of ${dollars(offer)} is acceptable to the shop.`);
+    return done(offer, "accepted", true, `Offer accepted at ${dollars(offer)} per unit.`, ask, false);
+  }
+  if (isFinal) {
+    reasons.push(`Offer ${dollars(offer)} is below the ask. Last round: ${dollars(ask)} is the final price.`);
+    pub.push(`Your offer of ${dollars(offer)} is lower than the shop can accept. ${dollars(ask)} per unit is the shop's final price.`);
+    return done(ask, "final_price", true, `That is as low as we can go. The final price is ${dollars(ask)} per unit.`, ask, true);
+  }
+  reasons.push(`Offer ${dollars(offer)} is below the ask ${dollars(ask)}: countered at the ask.`);
+  pub.push(`Your offer of ${dollars(offer)} is lower than the shop can accept right now. The best it can do right now is ${dollars(ask)} per unit.`);
+  return done(ask, "countered", true, `We cannot go as low as ${dollars(offer)}. The best I can do right now is ${dollars(ask)} per unit.`, ask, false);
 }

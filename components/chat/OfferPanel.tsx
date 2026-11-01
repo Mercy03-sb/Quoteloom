@@ -9,10 +9,10 @@ export type QuoteResult = Record<string, unknown>;
 
 const OUTCOME: Record<string, { label: string; tone: BadgeTone }> = {
   accepted: { label: "Offer accepted", tone: "success" },
-  countered: { label: "Counter-offer", tone: "warning" },
+  countered: { label: "Best price right now", tone: "warning" },
   negotiation_off: { label: "Shop does not negotiate", tone: "neutral" },
   offer_not_lower: { label: "Offer not below price", tone: "neutral" },
-  round_limit: { label: "Final price", tone: "warning" },
+  final_price: { label: "Final price", tone: "warning" },
 };
 
 type Negotiation = { outcome?: string; list_price?: string; offered?: string | null; final_unit_price?: string; reasons?: string[] };

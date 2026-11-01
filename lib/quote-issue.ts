@@ -26,7 +26,7 @@ export type IssuedQuote = Quote & {
 /** How long an agent's earlier offers for a SKU count as the same negotiation. */
 export const NEGOTIATION_WINDOW_MS = 30 * 60 * 1000;
 
-type History = { ts: string; offerCents: number | null; unitPriceCents: number }[];
+type History = { ts: string; offerCents: number | null; unitPriceCents: number; askCents: number | null; tierPriceCents: number | null }[];
 type Prepared = { product: ProductForQuote; decision: PriceDecision; history: History; breaks: QuantityBreak[] };
 type Message = { text: string; source: "gemini" | "template" } | null;
 
@@ -44,7 +44,13 @@ function offerHistory(db: DB, shop: Shop, sku: string, agent: string | null, now
       if (!req || !dec || req.offer_cents == null || (req.agent ?? null) !== agent) continue;
       const ts = String(req.ts);
       if (now.getTime() - Date.parse(ts) > NEGOTIATION_WINDOW_MS) continue;
-      out.push({ ts, offerCents: Number(req.offer_cents), unitPriceCents: Number(dec.unit_price_cents) });
+      out.push({
+        ts,
+        offerCents: Number(req.offer_cents),
+        unitPriceCents: Number(dec.unit_price_cents),
+        askCents: dec.ask_cents == null ? null : Number(dec.ask_cents),
+        tierPriceCents: dec.break_price_cents == null ? null : Number(dec.break_price_cents),
+      });
     } catch {
       /* skip unreadable transcripts */
     }
@@ -102,7 +108,7 @@ function persist(db: DB, shop: Shop, input: IssueInput, p: Prepared, message: Me
       ts,
       type: "offer_history",
       round: decision.round,
-      prior: p.history.map((h) => ({ ts: h.ts, offer_cents: h.offerCents, unit_price_cents: h.unitPriceCents })),
+      prior: p.history.map((h) => ({ ts: h.ts, offer_cents: h.offerCents, unit_price_cents: h.unitPriceCents, ask_cents: h.askCents })),
     });
   }
   transcript.push({
@@ -113,6 +119,9 @@ function persist(db: DB, shop: Shop, input: IssueInput, p: Prepared, message: Me
     list_price_cents: decision.listPriceCents,
     break_price_cents: decision.breakPriceCents,
     floor_cents: decision.floorCents,
+    round: decision.round,
+    ask_cents: decision.askCents,
+    is_final: decision.isFinal,
     negotiated: decision.negotiated,
     reasons: decision.reasons,
     public_reasons: decision.publicReasons,

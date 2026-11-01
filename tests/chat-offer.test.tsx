@@ -96,11 +96,11 @@ describe("Make an offer on a quote card", () => {
     await screen.findByTestId("negotiation-result");
     expect(chatBodies[0]).toMatchObject({ action: "quote", sku: "LT-SCARF-WOOL-GRY", qty: 1, offer_price: 30, shop: "s" });
     const res = screen.getByTestId("negotiation-result");
-    expect(res.textContent).toContain("Counter-offer");
+    expect(res.textContent).toContain("Best price right now");
     expect(res.textContent).toContain("You offered 30.00 USD, list price 48.00 USD");
     expect(within(res).getByRole("list", { name: "Decision reasons" }).textContent).toContain("best price it can do is 40.80");
     expect(res.textContent).toContain("We can do 40.80 per unit.");
-    expect(screen.getByText(/The shop answered with its best price/)).toBeTruthy();
+    expect(screen.getByText(/The shop answered with the best price it can do right now/)).toBeTruthy();
     // the new quote is the only card with the offer form; the old card keeps its details
     expect(screen.getAllByRole("form", { name: "Quantity and offer" })).toHaveLength(1);
     expect(screen.getAllByRole("link", { name: "Inspect quote" })).toHaveLength(2);

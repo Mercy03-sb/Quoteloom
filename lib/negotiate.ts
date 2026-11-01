@@ -17,13 +17,18 @@ export type MessageFacts = {
   shopName: string;
 };
 
+/** Words that claim the end of the negotiation or a rock-bottom price. */
+const FINALITY = /\b(final|finally|last|lowest|rock[- ]?bottom|non-?negotiable)\b/i;
+
 const money = (c: number) => (c / 100).toFixed(2);
 
 const SYSTEM =
   "You write the reply of a shop's seller agent to a buyer agent in a price negotiation. " +
   "The price has ALREADY been decided by the shop's rules. Write one or two short, polite sentences that state " +
-  "the final unit price exactly as given in the facts. Never mention any other price, discount, percentage, margin, cost or floor, " +
-  'and never promise anything else. Reply as JSON: {"message": "..."}.';
+  "the unit price exactly as given in the facts. Never mention any other price, discount, percentage, margin, cost, floor or round number, " +
+  "and never promise anything else. If is_last_round is false, describe the price as the best you can do right now and " +
+  'NEVER use the words "final", "last" or "lowest", and do not say the buyer cannot negotiate further. ' +
+  'If is_last_round is true, say this is the final price. Reply as JSON: {"message": "..."}.';
 
 /** Deterministic wording. Always available, used with no key or when the model fails or misbehaves. */
 export function templateMessage(f: MessageFacts): string {
@@ -34,9 +39,9 @@ export function templateMessage(f: MessageFacts): string {
     case "accepted":
       return `Deal. We can do ${unit} per unit for ${f.qty} x ${f.title}, ${total} in total.`;
     case "countered":
-      return `Thanks for the offer of ${money(d.offerCents ?? 0)} ${f.currency}. We cannot go that low, but we can do ${unit} per unit (${total} for ${f.qty}). This quote is signed.`;
-    case "round_limit":
-      return `We have gone as far as we can. ${unit} per unit is our final price (${total} for ${f.qty}).`;
+      return `Thanks for the offer of ${money(d.offerCents ?? 0)} ${f.currency}. We cannot go that low, but the best I can do right now is ${unit} per unit (${total} for ${f.qty}).`;
+    case "final_price":
+      return `That is as low as we can go. ${unit} per unit is our final price (${total} for ${f.qty}).`;
     case "negotiation_off":
       return `${f.shopName} does not negotiate prices. The price is ${unit} per unit (${total} for ${f.qty}).`;
     case "offer_not_lower":
@@ -53,6 +58,7 @@ export function messageIsSafe(text: string, f: MessageFacts): boolean {
   const d = f.decision;
   const allowed = new Set<string>([String(f.qty), money(d.unitPriceCents), money(d.unitPriceCents * f.qty)]);
   if (d.offerCents !== null) allowed.add(money(d.offerCents));
+  if (!d.isFinal && FINALITY.test(text)) return false; // only the last round may be called final
   const nums = text.match(/\d+(?:[.,]\d+)*/g) ?? [];
   return nums.every((n) => allowed.has(n.replace(/,/g, ""))); // exact text only: "1.00" is not the quantity 1
 }
@@ -72,8 +78,9 @@ export async function draftMessage(
     currency: facts.currency,
     outcome: d.outcome,
     buyer_offer_per_unit: d.offerCents === null ? null : money(d.offerCents),
-    final_unit_price: money(d.unitPriceCents),
-    final_total: money(d.unitPriceCents * facts.qty),
+    unit_price: money(d.unitPriceCents),
+    total: money(d.unitPriceCents * facts.qty),
+    is_last_round: d.isFinal,
   });
   try {
     const r = await generateJson({ db, system: SYSTEM, input, env: opts.env, fetchImpl: opts.fetchImpl, timeoutMs: 4000 });

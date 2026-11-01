@@ -205,8 +205,8 @@ export function ChatClient({ shopSlug }: { shopSlug: string }) {
             ? "Here is a signed price commitment. It is valid for 10 minutes."
             : n?.outcome === "accepted"
               ? "The shop accepted your offer. Here is the new signed quote, valid for 10 minutes."
-              : n?.outcome === "countered" || n?.outcome === "round_limit"
-                ? "The shop answered with its best price. Here is the new signed quote, valid for 10 minutes."
+              : n?.outcome === "countered" || n?.outcome === "final_price"
+                ? n?.outcome === "final_price" ? "That is the shop's final price. Here is the new signed quote, valid for 10 minutes." : "The shop answered with the best price it can do right now. Here is the new signed quote, valid for 10 minutes."
                 : "Here is a new signed quote. It is valid for 10 minutes.",
       });
     });
