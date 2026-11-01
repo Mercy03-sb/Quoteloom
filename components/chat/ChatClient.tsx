@@ -59,7 +59,9 @@ export function ChatClient() {
   const lastOrder = useRef<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" }), [msgs, busy]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView?.({ block: "end", behavior: "smooth" });
+  }, [msgs, busy]);
 
   const add = (...m: NewMsg[]) => setMsgs((cur) => [...cur, ...m.map((x) => ({ ...x, id: nextId++ }) as Msg)]);
 

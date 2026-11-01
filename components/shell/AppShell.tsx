@@ -15,7 +15,9 @@ export function AppShell({ badges, children }: { badges: ReactNode; children: Re
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
   return (
     <ToastProvider>
