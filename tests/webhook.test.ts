@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { createCheckout, loadOrder } from "@/lib/orders";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createCheckout, loadOrder, orderEvents } from "@/lib/orders";
 import { SIM_SIGNATURE_HEADER, simWebhookSignature, valueToCents } from "@/lib/paypal";
 import { issueQuote } from "@/lib/quote";
 import { handlePaypalWebhook, simulateCaptureWebhook, simWebhookSecret } from "@/lib/webhook";
@@ -145,5 +145,57 @@ describe("valueToCents", () => {
     expect(valueToCents("abc")).toBeNull();
     expect(valueToCents("-1.00")).toBeNull();
     expect(valueToCents(undefined)).toBeNull();
+  });
+});
+
+describe("webhook console line and audit log", () => {
+  afterEach(() => vi.restoreAllMocks());
+  const lines = (spy: { mock: { calls: unknown[][] } }) => spy.mock.calls.map((c) => String(c[0])).filter((l) => l.startsWith("[webhook]"));
+
+  it("logs one line per webhook: type, signature result, duplicate flag", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const { db, c } = await order();
+    const ok = signed(capture("E1", c.paypal_order_id));
+    await handlePaypalWebhook(db, ok.raw, ok.headers, { env });
+    await handlePaypalWebhook(db, ok.raw, ok.headers, { env }); // duplicate
+    await handlePaypalWebhook(db, ok.raw, new Headers(), { env }); // bad signature
+    expect(lines(spy)).toEqual([
+      "[webhook] type=PAYMENT.CAPTURE.COMPLETED signature=ok duplicate=no",
+      "[webhook] type=PAYMENT.CAPTURE.COMPLETED signature=ok duplicate=yes",
+      "[webhook] type=PAYMENT.CAPTURE.COMPLETED signature=failed duplicate=no",
+    ]);
+  });
+
+  it("never echoes arbitrary text from an unverified body into the log", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const { db } = await order();
+    await handlePaypalWebhook(db, JSON.stringify({ event_type: "evil fake line [webhook] signature=ok" }), new Headers(), { env });
+    await handlePaypalWebhook(db, "not json", new Headers(), { env });
+    expect(lines(spy)).toEqual([
+      "[webhook] type=unknown signature=failed duplicate=no",
+      "[webhook] type=unparseable signature=failed duplicate=no",
+    ]);
+  });
+
+  it("shows received webhooks, and duplicates, in the order audit log", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const { db, c } = await order();
+    const ap = signed({ id: "E1", event_type: "CHECKOUT.ORDER.APPROVED", resource: { id: c.paypal_order_id } });
+    await handlePaypalWebhook(db, ap.raw, ap.headers, { env });
+    await handlePaypalWebhook(db, ap.raw, ap.headers, { env });
+    const log = orderEvents(db, c.order_id);
+    const details = log.filter((e) => e.type.startsWith("webhook")).map((e) => e.detail);
+    expect(details).toEqual([
+      "Webhook received: CHECKOUT.ORDER.APPROVED, signature valid, status_APPROVED",
+      "Webhook received again: CHECKOUT.ORDER.APPROVED, signature valid, duplicate ignored",
+    ]);
+  });
+
+  it("does not put a rejected webhook in any order log", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const { db, c } = await order();
+    const raw = JSON.stringify(capture("E9", c.paypal_order_id));
+    await handlePaypalWebhook(db, raw, new Headers(), { env });
+    expect(orderEvents(db, c.order_id).some((e) => e.type.startsWith("webhook"))).toBe(false);
   });
 });

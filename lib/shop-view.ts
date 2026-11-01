@@ -1,11 +1,18 @@
 import type { CatalogRow } from "@/components/catalog/types";
 import { listProducts, type Shop } from "./catalog";
 import { getDb, type DB } from "./db";
+import { visibleShops } from "./workspace";
 
-/** First shop plus its catalog rows (the demo has one shop). Null when the DB has no shops. */
-export function loadPrimaryShop(): { shop: Shop; rows: CatalogRow[]; db: DB } | null {
+export type ActiveShop = { shop: Shop; shops: Shop[]; rows: CatalogRow[]; db: DB };
+
+/**
+ * The shop a page should show for this workspace: `slug` if the workspace may see it, else its newest
+ * own shop, else the shared demo shop. Null when the DB has no shops at all.
+ */
+export function loadActiveShop(workspaceId: string | null, slug?: string): ActiveShop | null {
   const db = getDb();
-  const shop = db.prepare("SELECT id, slug, name, source_url FROM shops ORDER BY id LIMIT 1").get() as Shop | undefined;
+  const shops = visibleShops(db, workspaceId);
+  const shop = shops.find((s) => s.slug === slug) ?? shops[0];
   if (!shop) return null;
   const rows = listProducts(db, shop.id).map(({ sku, title, description, price_cents, currency, stock, attrs_json }) => {
     const a = JSON.parse(attrs_json || "{}") as Record<string, unknown>;
@@ -14,5 +21,5 @@ export function loadPrimaryShop(): { shop: Shop; rows: CatalogRow[]; db: DB } | 
     if (typeof a.color === "string") attrs.color = a.color;
     return { sku, title, description, price_cents, currency, stock, attrs };
   });
-  return { shop, rows, db };
+  return { shop, shops, rows, db };
 }

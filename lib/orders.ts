@@ -251,7 +251,9 @@ export function orderEvents(db: DB, orderId: string): OrderEvent[] {
       r.type === "order.status"
         ? `${p.from} to ${p.to} (${p.source})`
         : r.type === "webhook"
-          ? `${p.event_type}: ${p.outcome}`
+          ? `Webhook received: ${p.event_type}, signature ${p.signature ?? "valid"}, ${p.outcome}`
+          : r.type === "webhook.duplicate"
+            ? `Webhook received again: ${p.event_type}, signature valid, duplicate ignored`
           : r.type === "order.created"
             ? `PayPal order ${p.paypal_order_id}`
             : r.type === "order.captured"

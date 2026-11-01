@@ -1,11 +1,30 @@
 // SQLite schema (see SPEC.md "Data model"). State is disposable; recreated on boot.
 export const SCHEMA = `
+CREATE TABLE IF NOT EXISTS workspaces (
+  id TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS shops (
   id INTEGER PRIMARY KEY,
   slug TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   source_url TEXT,
-  rules_json TEXT NOT NULL DEFAULT '{}'
+  rules_json TEXT NOT NULL DEFAULT '{}',
+  workspace_id TEXT REFERENCES workspaces(id) ON DELETE CASCADE -- null = shared demo shop
+);
+CREATE TABLE IF NOT EXISTS conversations (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  shop_id INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (workspace_id, shop_id)
+);
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  content_json TEXT NOT NULL,
+  ts TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS products (
   id INTEGER PRIMARY KEY,
@@ -71,10 +90,13 @@ CREATE TABLE IF NOT EXISTS llm_cache (
 export const TABLES = [
   "llm_cache",
   "events",
+  "messages",
+  "conversations",
   "disputes",
   "orders",
   "quotes",
   "search_log",
   "products",
   "shops",
+  "workspaces",
 ] as const;

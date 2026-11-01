@@ -12,12 +12,52 @@ type Msg =
   | { id: number; from: "agent"; text: string }
   | { id: number; from: "tool"; outcome: ToolOutcome };
 
+const GREETING: Msg = {
+  id: 0,
+  from: "agent",
+  text: "Hi, I'm a built-in buyer agent. Tell me what you're looking for and I'll search the shop through its MCP tools, then ask for a signed quote.",
+};
+type Missing = { quotes: string[]; orders: string[] };
+const NO_MISSING: Missing = { quotes: [], orders: [] };
+const MAX_STORED = 200;
+
+function readLocal(key: string): Msg[] {
+  try {
+    const raw = window.localStorage.getItem(key);
+    const data = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(data) ? (data as Msg[]).filter((m) => m && typeof m.id === "number" && typeof m.from === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocal(key: string, msgs: Msg[]): void {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(msgs.slice(-MAX_STORED)));
+  } catch {
+    /* storage full or blocked: the server copy still works */
+  }
+}
+
+/** Shown in place of a quote or order card whose record is gone (the demo DB resets on restart). */
+function Unavailable({ what }: { what: "quote" | "order" }) {
+  return (
+    <div className="notice" data-tone="warning" role="status" data-testid={`${what}-unavailable`}>
+      This {what} is no longer available. The demo database resets when the server restarts, so ask for a new one.
+    </div>
+  );
+}
+
 const SUGGESTIONS = ["wool scarf", "linen throw blanket", "something for the kitchen", "weaving kit"];
 type NewMsg = Msg extends infer M ? (M extends { id: number } ? Omit<M, "id"> : never) : never;
 let nextId = 1;
 
 async function post(body: Record<string, unknown>): Promise<unknown> {
   const res = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (res.status === 429) {
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(data.message ?? "Too many requests. Please wait a moment.");
+  }
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
   return res.json();
 }
@@ -48,27 +88,95 @@ function ToolCall({ outcome }: { outcome: ToolOutcome }) {
   );
 }
 
-export function ChatClient() {
+export function ChatClient({ shopSlug }: { shopSlug: string }) {
   const toast = useToast();
-  const [msgs, setMsgs] = useState<Msg[]>([
-    { id: 0, from: "agent", text: "Hi, I'm a built-in buyer agent. Tell me what you're looking for and I'll search the shop through its MCP tools, then ask for a signed quote." },
-  ]);
+  const storageKey = `ql-chat:${shopSlug}`;
+  const [msgs, setMsgs] = useState<Msg[]>([GREETING]);
+  const [missing, setMissing] = useState<Missing>(NO_MISSING);
+  const [restoring, setRestoring] = useState(true);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const lastQuote = useRef<string | null>(null);
-  const lastOrder = useRef<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+
+  // Restore on load: the server copy (per workspace) wins; localStorage is the mirror used if the server has none.
+  useEffect(() => {
+    let cancelled = false;
+    const local = readLocal(storageKey);
+    if (local.length) {
+      nextId = Math.max(nextId, ...local.map((m) => m.id + 1));
+      setMsgs(local);
+    }
+    (async () => {
+      try {
+        const res = await fetch(`/api/conversation?shop=${encodeURIComponent(shopSlug)}`);
+        if (!res.ok) throw new Error("restore failed");
+        const data = (await res.json()) as { messages: Msg[]; missing: Missing };
+        if (cancelled) return;
+        if (data.messages.length) {
+          nextId = Math.max(nextId, ...data.messages.map((m) => m.id + 1));
+          setMsgs(data.messages);
+          setMissing(data.missing);
+        } else if (local.length) {
+          const put = await fetch("/api/conversation", {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ shop: shopSlug, messages: local }),
+          });
+          if (put.ok && !cancelled) setMissing(((await put.json()) as { missing: Missing }).missing);
+        }
+      } catch {
+        /* offline or server reset: keep whatever localStorage gave us */
+      } finally {
+        if (!cancelled) setRestoring(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [shopSlug, storageKey]);
+
+  // Persist after every change: localStorage immediately, server shortly after (debounced).
+  useEffect(() => {
+    if (restoring) return;
+    writeLocal(storageKey, msgs);
+    const t = setTimeout(() => {
+      fetch("/api/conversation", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ shop: shopSlug, messages: msgs.slice(-MAX_STORED) }),
+      }).catch(() => {});
+    }, 500);
+    return () => clearTimeout(t);
+  }, [msgs, restoring, shopSlug, storageKey]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: "end", behavior: "smooth" });
   }, [msgs, busy]);
+
+  /** Newest successful result of a tool, ignoring ids whose records no longer exist. */
+  const latest = (tool: string, field: string, gone: string[]): string | null => {
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (m.from === "tool" && m.outcome.tool === tool && !m.outcome.isError) {
+        const id = String(m.outcome.result[field]);
+        return gone.includes(id) ? null : id;
+      }
+    }
+    return null;
+  };
+
+  function newConversation() {
+    nextId = 1;
+    setMissing(NO_MISSING);
+    setMsgs([GREETING]);
+  }
 
   const add = (...m: NewMsg[]) => setMsgs((cur) => [...cur, ...m.map((x) => ({ ...x, id: nextId++ }) as Msg)]);
 
   async function run(body: Record<string, unknown>, then?: (o: ToolOutcome) => void) {
     setBusy(true);
     try {
-      const outcome = (await post(body)) as ToolOutcome;
+      const outcome = (await post({ ...body, shop: shopSlug })) as ToolOutcome;
       add({ from: "tool", outcome });
       then?.(outcome);
     } catch (e) {
@@ -88,20 +196,18 @@ export function ChatClient() {
   const quote = (sku: string, qty: number) =>
     run({ action: "quote", sku, qty }, (o) => {
       if (o.isError) return add({ from: "agent", text: String(o.result.message ?? "The shop declined that quote.") });
-      lastQuote.current = String(o.result.quote_id);
       add({ from: "agent", text: "Here is a signed price commitment. It is valid for 10 minutes." });
     });
 
   const checkout = (quoteId: string) =>
     run({ action: "checkout", quote_id: quoteId }, (o) => {
       if (o.isError) return add({ from: "agent", text: String(o.result.message ?? "Checkout failed.") });
-      lastOrder.current = String(o.result.order_id);
       add({ from: "agent", text: "Order created. A human has to approve the payment on the checkout page." });
     });
 
   async function submit(raw: string) {
     const value = raw.trim();
-    if (!value || busy) return;
+    if (!value || busy || restoring) return;
     setText("");
     add({ from: "you", text: value });
     let intent: Intent;
@@ -113,12 +219,12 @@ export function ChatClient() {
     if (intent.type === "search") return search(intent.query);
     if (intent.type === "quote") return quote(intent.sku, intent.qty);
     if (intent.type === "checkout") {
-      return lastQuote.current ? checkout(lastQuote.current) : add({ from: "agent", text: "Get a quote first, then I can check out." });
+      const q = latest("request_quote", "quote_id", missing.quotes);
+      return q ? checkout(q) : add({ from: "agent", text: "Get a quote first, then I can check out." });
     }
     if (intent.type === "status") {
-      return lastOrder.current
-        ? run({ action: "status", order_id: lastOrder.current })
-        : add({ from: "agent", text: "No order yet in this chat." });
+      const ord = latest("create_checkout", "order_id", missing.orders);
+      return ord ? run({ action: "status", order_id: ord }) : add({ from: "agent", text: "No order yet in this chat." });
     }
     add({ from: "agent", text: "Try: \"wool scarf\", then pick a product. You can also type \"quote 2 LT-SCARF-WOOL-GRY\" or \"buy\"." });
   }
@@ -150,7 +256,8 @@ export function ChatClient() {
                     ))}
                   </div>
                 )}
-                {o.tool === "request_quote" && !o.isError && (
+                {o.tool === "request_quote" && !o.isError && missing.quotes.includes(String(r.quote_id)) && <Unavailable what="quote" />}
+                {o.tool === "request_quote" && !o.isError && !missing.quotes.includes(String(r.quote_id)) && (
                   <div className="quote-card">
                     <div className="card-head">
                       <h3>{String(r.title)}</h3>
@@ -168,7 +275,8 @@ export function ChatClient() {
                     </div>
                   </div>
                 )}
-                {o.tool === "create_checkout" && !o.isError && (
+                {o.tool === "create_checkout" && !o.isError && missing.orders.includes(String(r.order_id)) && <Unavailable what="order" />}
+                {o.tool === "create_checkout" && !o.isError && !missing.orders.includes(String(r.order_id)) && (
                   <div className="quote-card">
                     <div className="card-head">
                       <h3>Order ready</h3>
@@ -180,7 +288,7 @@ export function ChatClient() {
                     <a className="btn btn-primary btn-sm" href={String(r.approval_url)}>Open checkout to pay</a>
                   </div>
                 )}
-                {o.tool === "get_order_status" && !o.isError && (
+                {o.tool === "get_order_status" && !o.isError && !missing.orders.includes(String(r.order_id)) && (
                   <p className="stat-note">Order {String(r.order_id)} is <b>{String(r.status)}</b>.</p>
                 )}
               </div>
@@ -192,18 +300,20 @@ export function ChatClient() {
             </div>
           );
         })}
+        {restoring && <p className="stat-note" role="status">Restoring your conversation…</p>}
         {busy && <div className="msg msg-agent"><div className="bubble"><span className="skeleton" style={{ display: "inline-block", width: 90, height: 12 }} /></div></div>}
         <div ref={endRef} />
       </div>
       <div className="row chat-suggest">
         {SUGGESTIONS.map((s) => (
-          <button key={s} type="button" className="chip" disabled={busy} onClick={() => submit(s)}>{s}</button>
+          <button key={s} type="button" className="chip" disabled={busy || restoring} onClick={() => submit(s)}>{s}</button>
         ))}
+        <button type="button" className="chip chip-quiet" disabled={busy || restoring || msgs.length <= 1} onClick={newConversation}>New conversation</button>
       </div>
       <form className="chat-input" onSubmit={(e) => { e.preventDefault(); void submit(text); }}>
         <label className="sr-only" htmlFor="chat-text">Message</label>
         <input id="chat-text" value={text} onChange={(e) => setText(e.target.value)} placeholder="Search the shop, e.g. wool scarf" maxLength={300} autoComplete="off" />
-        <Button type="submit" disabled={busy || !text.trim()}>Send</Button>
+        <Button type="submit" disabled={busy || restoring || !text.trim()}>Send</Button>
       </form>
     </div>
   );

@@ -2,7 +2,7 @@
 export const DEMO_SHOP = {
   slug: "loom-and-thread",
   name: "Loom & Thread (demo)",
-  source_url: null as string | null, // set by URL ingest (Milestone 3)
+  source_url: null as string | null, // the demo shop is seeded, not ingested
   rules: { min_margin_pct: 20, max_discount_pct: 15, negotiation: true },
 };
 

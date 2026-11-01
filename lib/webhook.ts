@@ -20,6 +20,21 @@ export function simWebhookSecret(env: Env = process.env): string {
   return createHmac("sha256", signingSecret(env)).update("sim-webhook").digest("hex");
 }
 
+/** Event type from a body whose signature failed. Only a plain PayPal-style token is echoed, never arbitrary text. */
+function peekEventType(rawBody: string): string {
+  try {
+    const t = (JSON.parse(rawBody) as { event_type?: unknown }).event_type;
+    return typeof t === "string" && /^[A-Z0-9._]{1,60}$/.test(t) ? t : "unknown";
+  } catch {
+    return "unparseable";
+  }
+}
+
+/** One console line per webhook received: type, signature result, duplicate or not. No payload, no secrets. */
+export function logWebhookLine(eventType: string, signatureOk: boolean, duplicate: boolean): void {
+  console.log(`[webhook] type=${eventType} signature=${signatureOk ? "ok" : "failed"} duplicate=${duplicate ? "yes" : "no"}`);
+}
+
 const TARGET: Record<string, OrderStatus> = {
   "CHECKOUT.ORDER.APPROVED": "APPROVED",
   "PAYMENT.CAPTURE.COMPLETED": "PAID",
@@ -38,6 +53,7 @@ export async function handlePaypalWebhook(
   const env = opts.env ?? process.env;
   const valid = await verifyWebhook({ headers, rawBody, simSecret: simWebhookSecret(env), env, fetchImpl: opts.fetchImpl });
   if (!valid) {
+    logWebhookLine(peekEventType(rawBody), false, false);
     logEvent(db, "webhook.rejected", { reason: "invalid_signature" });
     return { status: 401, body: { error: "invalid_signature" } };
   }
@@ -46,14 +62,24 @@ export async function handlePaypalWebhook(
   try {
     event = JSON.parse(rawBody) as PaypalEvent;
   } catch {
+    logWebhookLine("unparseable", true, false);
     return { status: 400, body: { error: "invalid_json" } };
   }
   if (typeof event.id !== "string" || typeof event.event_type !== "string") {
+    logWebhookLine("unknown", true, false);
     return { status: 400, body: { error: "missing_event_id_or_type" } };
   }
 
   const seen = db.prepare("SELECT 1 FROM events WHERE type = 'webhook' AND json_extract(payload_json, '$.id') = ?").get(event.id);
-  if (seen) return { status: 200, body: { received: true, duplicate: true } };
+  if (seen) {
+    // Keep the duplicate visible in the order's audit log too.
+    const dupRes = event.resource ?? {};
+    const dupOrderId = event.event_type.startsWith("PAYMENT.CAPTURE.") ? dupRes.supplementary_data?.related_ids?.order_id : dupRes.id;
+    const dupOrder = dupOrderId ? findOrderByPaypalId(db, dupOrderId) : undefined;
+    logEvent(db, "webhook.duplicate", { id: event.id, event_type: event.event_type, order_id: dupOrder?.id ?? null });
+    logWebhookLine(event.event_type, true, true);
+    return { status: 200, body: { received: true, duplicate: true } };
+  }
 
   const res = event.resource ?? {};
   const isCapture = event.event_type.startsWith("PAYMENT.CAPTURE.");
@@ -74,7 +100,8 @@ export async function handlePaypalWebhook(
     outcome = setStatus(db, order, target, `webhook:${event.event_type}`) ? `status_${target}` : "no_change";
   }
 
-  logEvent(db, "webhook", { id: event.id, event_type: event.event_type, order_id: order?.id ?? null, outcome });
+  logEvent(db, "webhook", { id: event.id, event_type: event.event_type, order_id: order?.id ?? null, outcome, signature: "valid" });
+  logWebhookLine(event.event_type, true, false);
   return { status: 200, body: { received: true, outcome } };
 }
 

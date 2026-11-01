@@ -6,12 +6,15 @@ import { Badge, Card, EmptyState } from "@/components/ui";
 import { formatCents } from "@/lib/catalog";
 import { mcpUrl, resolveBaseUrl } from "@/lib/base-url";
 import { getShopStats } from "@/lib/dashboard";
-import { loadPrimaryShop } from "@/lib/shop-view";
+import { ShopSwitcher } from "@/components/shell/ShopSwitcher";
+import { loadActiveShop } from "@/lib/shop-view";
+import { currentWorkspaceId } from "@/lib/workspace-server";
 
 export const dynamic = "force-dynamic";
 
-export default async function Dashboard() {
-  const data = loadPrimaryShop();
+export default async function Dashboard({ searchParams }: { searchParams: Promise<{ shop?: string }> }) {
+  const { shop: wanted } = await searchParams;
+  const data = loadActiveShop(await currentWorkspaceId(), wanted);
   if (!data) {
     return (
       <div className="page">
@@ -21,7 +24,7 @@ export default async function Dashboard() {
       </div>
     );
   }
-  const { shop, rows, db } = data;
+  const { shop, shops, rows, db } = data;
   const stats = getShopStats(db, shop.id);
   const endpoint = mcpUrl(resolveBaseUrl(await headers()), shop.slug);
 
@@ -29,7 +32,8 @@ export default async function Dashboard() {
     <div className="page">
       <Card hero>
         <div className="row" style={{ marginBottom: "var(--sp-3)" }}>
-          <Badge tone="accent">Your storefront</Badge>
+          <Badge tone="accent">{shop.source_url || shops.length > 1 ? "Storefront" : "Demo storefront"}</Badge>
+          <ShopSwitcher shops={shops} active={shop.slug} />
         </div>
         <h1>{shop.name}</h1>
         <p style={{ color: "var(--c-text-muted)", margin: "var(--sp-2) 0 var(--sp-5)", maxWidth: "58ch" }}>
@@ -68,7 +72,7 @@ export default async function Dashboard() {
       <section style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
         <div className="page-head">
           <h2>Featured products</h2>
-          <Link className="btn btn-secondary btn-sm" href="/catalog">
+          <Link className="btn btn-secondary btn-sm" href={`/catalog?shop=${shop.slug}`}>
             Open full catalog
           </Link>
         </div>

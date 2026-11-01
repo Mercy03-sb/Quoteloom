@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
 import { databasePath } from "./config";
-import { SCHEMA } from "./schema";
+import { SCHEMA, TABLES } from "./schema";
 import { seed } from "./seed";
 
 export type DB = Database.Database;
@@ -13,8 +13,18 @@ export function openDb(file: string): DB {
   const db = new Database(file);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
+  dropStaleSchema(db);
   db.exec(SCHEMA);
   return db;
+}
+
+/** State is disposable: a DB file from before multi-shop support is dropped and rebuilt, not migrated. */
+function dropStaleSchema(db: DB): void {
+  const cols = db.prepare("PRAGMA table_info(shops)").all() as { name: string }[];
+  if (cols.length === 0 || cols.some((c) => c.name === "workspace_id")) return;
+  db.pragma("foreign_keys = OFF");
+  for (const t of TABLES) db.exec(`DROP TABLE IF EXISTS ${t}`);
+  db.pragma("foreign_keys = ON");
 }
 
 const g = globalThis as unknown as { __quoteloomDb?: DB };

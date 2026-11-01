@@ -67,6 +67,7 @@ export function AppShell({ badges, children }: { badges: ReactNode; children: Re
             {badges}
             <ThemeToggle />
             <p className="stat-note">Fake data only. Sandbox only. No real money.</p>
+            <p className="stat-note" data-testid="reset-note">The demo workspace resets when the server restarts.</p>
           </div>
         </aside>
         <main className="main">{children}</main>
