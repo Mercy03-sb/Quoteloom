@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Badge, Button, useToast } from "@/components/ui";
 import { weaveFor, weaveStyle } from "@/lib/design/weave";
 import type { Intent, ToolOutcome } from "@/lib/chat";
+import { NegotiationResult, OfferPanel } from "./OfferPanel";
 
 type Product = { sku: string; title: string; description: string; price: string; currency: string; in_stock: boolean };
 type Msg =
@@ -193,11 +194,24 @@ export function ChatClient({ shopSlug }: { shopSlug: string }) {
       add({ from: "agent", text: n ? `Found ${n} product${n === 1 ? "" : "s"}. Pick one to get a signed quote.` : "Nothing matched. Try different words." });
     });
 
-  const quote = (sku: string, qty: number) =>
-    run({ action: "quote", sku, qty }, (o) => {
+  const quote = (sku: string, qty: number, offer?: number) =>
+    run({ action: "quote", sku, qty, ...(offer === undefined ? {} : { offer_price: offer }) }, (o) => {
       if (o.isError) return add({ from: "agent", text: String(o.result.message ?? "The shop declined that quote.") });
-      add({ from: "agent", text: "Here is a signed price commitment. It is valid for 10 minutes." });
+      const n = o.result.negotiation as { outcome?: string } | undefined;
+      add({
+        from: "agent",
+        text:
+          offer === undefined
+            ? "Here is a signed price commitment. It is valid for 10 minutes."
+            : n?.outcome === "accepted"
+              ? "The shop accepted your offer. Here is the new signed quote, valid for 10 minutes."
+              : n?.outcome === "countered" || n?.outcome === "round_limit"
+                ? "The shop answered with its best price. Here is the new signed quote, valid for 10 minutes."
+                : "Here is a new signed quote. It is valid for 10 minutes.",
+      });
     });
+
+  const newestQuoteId = latest("request_quote", "quote_id", missing.quotes);
 
   const checkout = (quoteId: string) =>
     run({ action: "checkout", quote_id: quoteId }, (o) => {
@@ -269,6 +283,10 @@ export function ChatClient({ shopSlug }: { shopSlug: string }) {
                       <span>Total</span><b>{String(r.total)} {String(r.currency)}</b>
                       <span>Signature</span><code className="sig">{String(r.signature).slice(0, 22)}…</code>
                     </div>
+                    <NegotiationResult r={r} />
+                    {String(r.quote_id) === newestQuoteId && (
+                      <OfferPanel key={String(r.quote_id)} r={r} busy={busy} onSubmit={(qty, offer) => quote(String(r.sku), qty, offer)} />
+                    )}
                     <div className="row">
                       <Button size="sm" disabled={busy} onClick={() => checkout(String(r.quote_id))}>Check out with PayPal</Button>
                       <Link className="btn btn-ghost btn-sm" href={`/quote/${String(r.quote_id)}`}>Inspect quote</Link>

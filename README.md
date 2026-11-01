@@ -70,6 +70,8 @@ Quotes are signed with HMAC-SHA256 using `QUOTE_SIGNING_SECRET` (a random per-pr
 
 **Negotiation.** `lib/policy.ts` decides the unit price from the shop's rules: negotiation on/off, max discount %, minimum margin % (used when a product has a cost), an optional per-product floor (`attrs.floor_cents`) and quantity breaks. A quantity break lowers the standing price; an offer at or above the floor (and below the standing price) is accepted; an offer below the floor gets a counter at the midpoint, never under the floor; after 5 offers from the same agent for the same SKU the best price already given is final. The signed quote records the negotiated price, and its transcript stores the request, offer history, decision reasons and the reply. Gemini (through `lib/llm.ts`) may word the reply; it is only asked after the price is fixed, and any draft that mentions an amount we did not give it is discarded for a template. With no key the template is used.
 
+**Buyer chat offers.** The newest quote card in `/chat` has a quantity box that lists the shop's quantity discounts and updates as the quantity changes, plus a "Make an offer" form. It calls `request_quote` with `offer_price` and shows the outcome (accepted, counter, final, or no negotiation), buyer-safe reasons (no floor, cost or margin), the reply and the new signed quote.
+
 **Rules editor.** `/settings` edits the rules for a shop you published (the shared demo shop is read-only). New shops start with negotiation off.
 
 **Orders.** `/orders` is an AG Grid table (column filters, status chips, search, "negotiated only"); `/orders/{id}` shows the price, negotiation outcome and reasons, and the audit trail.

@@ -103,7 +103,10 @@ export function buildShopServer(db: DB, shop: Shop, agentId: string | null, base
             list_price: money(q.list_price_cents),
             offered: offer_price === undefined ? null : money(Math.round(offer_price * 100)),
             final_unit_price: money(q.price_cents),
+            reasons: q.public_reasons,
           },
+          list_price: money(q.list_price_cents),
+          quantity_discounts: q.quantity_discounts,
           message: q.message,
         });
       } catch (err) {

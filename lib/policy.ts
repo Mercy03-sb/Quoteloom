@@ -143,7 +143,8 @@ export type PriceDecision = {
   negotiated: boolean; // true when the final price came from the buyer's offer or a counter, not just list/break
   outcome: Outcome;
   note: string; // template wording of the decision (an LLM may rephrase it, the price stays)
-  reasons: string[]; // each deterministic step, for the transcript
+  reasons: string[]; // each deterministic step, for the merchant (mentions the floor)
+  publicReasons: string[]; // the same decision in words that are safe to show the buyer (no floor, cost or margin)
   listPriceCents: number;
   breakPriceCents: number;
   floorCents: number;
@@ -209,6 +210,7 @@ export function decideUnitPrice(input: {
   const prior = input.priorOffers ?? [];
   const round = prior.length + 1;
   const reasons: string[] = [];
+  const pub: string[] = [];
   const { floorCents, why } = floorPriceCents({ listPriceCents, costCents: input.costCents, floorCents: input.floorCents, rules });
 
   const brk = breakDiscountPct(qty, rules);
@@ -216,6 +218,7 @@ export function decideUnitPrice(input: {
   if (brk > 0) {
     standing = Math.max(floorCents, Math.round((listPriceCents * (100 - brk)) / 100));
     reasons.push(`Quantity break: ${brk}% off for ${qty} or more, giving ${dollars(standing)}.`);
+    pub.push(`Quantity discount: ${brk}% off for ${qty} or more, giving ${dollars(standing)} per unit.`);
   }
   reasons.push(`Floor is ${dollars(floorCents)} (${why}).`);
   const base = { listPriceCents, breakPriceCents: standing, floorCents, offerCents: offer, round };
@@ -226,6 +229,7 @@ export function decideUnitPrice(input: {
     negotiated,
     note,
     reasons,
+    publicReasons: pub,
   });
 
   if (offer === null) {
@@ -235,19 +239,23 @@ export function decideUnitPrice(input: {
   }
   if (!rules.negotiation) {
     reasons.push("Negotiation is off for this shop, so the offer was not considered.");
+    pub.push("This shop does not negotiate, so your offer was not considered.");
     return done(standing, "negotiation_off", false, `This shop does not negotiate. The price is ${dollars(standing)} per unit.`);
   }
   if (offer >= standing) {
     reasons.push(`Offer ${dollars(offer)} is not below the standing price ${dollars(standing)}; no discount needed.`);
+    pub.push(`Your offer of ${dollars(offer)} is not below the current price of ${dollars(standing)}, so no discount applies.`);
     return done(standing, "offer_not_lower", false, `Your offer is not below the current price, so the price stays ${dollars(standing)} per unit.`);
   }
   if (prior.length >= MAX_ROUNDS) {
     const best = Math.min(standing, ...prior.map((p) => p.unitPriceCents));
     reasons.push(`Round limit of ${MAX_ROUNDS} reached; the best price already given (${dollars(best)}) is final.`);
+    pub.push(`The negotiation limit was reached, so ${dollars(best)} per unit is final.`);
     return done(best, "round_limit", true, `We have reached the end of negotiation. Our final price is ${dollars(best)} per unit.`);
   }
   if (offer >= floorCents) {
     reasons.push(`Offer ${dollars(offer)} is at or above the floor ${dollars(floorCents)}: accepted.`);
+    pub.push(`Your offer of ${dollars(offer)} is within what the shop can accept.`);
     return done(offer, "accepted", true, `Offer accepted at ${dollars(offer)} per unit.`);
   }
   const mid = Math.ceil((offer + standing) / 2);
@@ -255,5 +263,6 @@ export function decideUnitPrice(input: {
   reasons.push(
     `Offer ${dollars(offer)} is below the floor ${dollars(floorCents)}. Counter: midpoint ${dollars(mid)}, held at or above the floor, gives ${dollars(counter)}.`,
   );
+  pub.push(`Your offer of ${dollars(offer)} is lower than the shop can accept. The best price it can do is ${dollars(counter)} per unit.`);
   return done(counter, "countered", true, `We cannot go as low as ${dollars(offer)}. The best we can do is ${dollars(counter)} per unit.`);
 }

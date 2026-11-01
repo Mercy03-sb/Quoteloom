@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import type { Shop } from "./catalog";
 import type { DB } from "./db";
 import { draftMessage, templateMessage } from "./negotiate";
-import { checkQuantity, decideUnitPrice, parseRules, type Outcome, type PriceDecision } from "./policy";
+import { checkQuantity, decideUnitPrice, parseRules, type Outcome, type PriceDecision, type QuantityBreak } from "./policy";
 import { QUOTE_TTL_MS, QuoteError, signQuote, signingSecret, type Quote, type QuoteFields } from "./quote";
 
 type ProductForQuote = { title: string; price_cents: number; currency: string; stock: number; attrs_json: string };
@@ -19,13 +19,15 @@ export type IssuedQuote = Quote & {
   outcome: Outcome;
   negotiated: boolean;
   list_price_cents: number;
+  public_reasons: string[];
+  quantity_discounts: QuantityBreak[];
 };
 
 /** How long an agent's earlier offers for a SKU count as the same negotiation. */
 export const NEGOTIATION_WINDOW_MS = 30 * 60 * 1000;
 
 type History = { ts: string; offerCents: number | null; unitPriceCents: number }[];
-type Prepared = { product: ProductForQuote; decision: PriceDecision; history: History };
+type Prepared = { product: ProductForQuote; decision: PriceDecision; history: History; breaks: QuantityBreak[] };
 type Message = { text: string; source: "gemini" | "template" } | null;
 
 /** Earlier answers this agent got for this SKU in this shop (offers only), oldest first. */
@@ -76,7 +78,7 @@ function prepare(db: DB, shop: Shop, input: IssueInput, now: Date): Prepared {
     rules,
     priorOffers: history,
   });
-  return { product, decision, history };
+  return { product, decision, history, breaks: rules.quantity_breaks };
 }
 
 function persist(db: DB, shop: Shop, input: IssueInput, p: Prepared, message: Message, now: Date, secret: string): IssuedQuote {
@@ -113,6 +115,7 @@ function persist(db: DB, shop: Shop, input: IssueInput, p: Prepared, message: Me
     floor_cents: decision.floorCents,
     negotiated: decision.negotiated,
     reasons: decision.reasons,
+    public_reasons: decision.publicReasons,
     note: decision.note,
   });
   if (message) transcript.push({ ts, type: "message", source: message.source, text: message.text });
@@ -132,6 +135,8 @@ function persist(db: DB, shop: Shop, input: IssueInput, p: Prepared, message: Me
     outcome: decision.outcome,
     negotiated: decision.negotiated,
     list_price_cents: decision.listPriceCents,
+    public_reasons: decision.publicReasons,
+    quantity_discounts: p.breaks,
   };
 }
 
