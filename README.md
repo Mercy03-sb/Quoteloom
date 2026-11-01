@@ -61,13 +61,24 @@ To use it from Claude Desktop, add it as a remote MCP server. Claude Desktop rea
 - `lib/catalog.ts` product search and search logging
 - `lib/mcp.ts` per-shop MCP server (stateless, JSON responses)
 - `lib/config.ts` sim/sandbox mode detection
+- `lib/design/tokens.ts` design tokens (colours, type scale, spacing, radii) and the CSS they generate
+- `lib/dashboard.ts`, `lib/shop-view.ts` dashboard numbers and shop/catalog loading
+- `components/ui/` Card, Button, Badge, Table, EmptyState, Skeleton, Toast
+- `components/shell/` app shell (sidebar, mobile drawer, theme toggle, mode badges)
+- `components/catalog/` product cards, card/table catalog view, AG Grid table
 - `tests/` Vitest unit tests
+
+## Design system
+
+A warm, woven-textile look: linen neutrals, one indigo accent, "thread" colours for product swatches, Fraunces (display) with Hanken Grotesk (text), both self-hosted through `@fontsource-variable` so there is no network call at runtime. All colours and sizes live in `lib/design/tokens.ts`; `themeCss()` turns them into CSS variables, and `app/globals.css` and the AG Grid theme (`components/catalog/CatalogGrid.tsx`, AG Grid Community) only use those variables. Light and dark follow the OS, and the sidebar toggle saves an explicit choice. A badge in the sidebar always shows **Simulation mode** or **Live sandbox**. Below 860px the sidebar becomes a drawer.
 
 ## Status
 
 - [x] Milestone 1 (partial): Next.js + SQLite, seed, demo shop, `search_products` MCP tool, sim mode with no env vars
 - [ ] Milestone 1 (remaining): Render deploy, PayPal sandbox order
-- [ ] Milestone 2: signed quotes, checkout, capture, webhooks, order status
+- [x] Milestone 1b: Render blueprint, PayPal sandbox order (code)
+- [x] Milestone 2a: design foundation, app shell, dashboard, catalog with AG Grid
+- [ ] Milestone 2b: signed quotes, checkout, capture, webhooks, order status, buyer chat
 
 ## License
 

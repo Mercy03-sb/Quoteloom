@@ -13,7 +13,8 @@ Paste a small shop's URL (or upload a CSV). Quoteloom builds an agent-ready stor
 - DONE: Milestone 1 core (commit 48cf614). Next.js + TypeScript, SQLite with all spec tables and a seed, one demo shop "Loom & Thread" with 12 products, `search_products` MCP tool at `/m/{shop}/mcp` (plain JSON, no sessions), search logging, 17 tests passing, build passing, runs with no env vars.
 - DONE: Milestone 1b code: `render.yaml`, `engines` Node 22, `lib/paypal.ts` (sandbox order via APIMatic Context Plugin, sim fallback), `/api/dev/paypal-test`, 24 tests passing.
 - TODO (manual, needs accounts): deploy the blueprint on Render, set sandbox creds, hit `/api/dev/paypal-test` for a real sandbox link, and test the Render MCP URL as a custom connector in Claude Desktop.
-- Then Milestone 2 together with the design foundation (see UI and design).
+- DONE: Milestone 2a, design foundation: `lib/design/tokens.ts` (colours, type scale, spacing, radii, light/dark), app shell with sidebar and mobile drawer, Card/Button/Badge/Table/EmptyState/Skeleton/Toast in `components/ui/`, Simulation/Sandbox badge, dashboard at `/` (shop hero, stats, featured products), `/catalog` with a Cards/Table toggle (AG Grid Community, themed from the tokens), loading/error/not-found states. Fonts self-hosted via `@fontsource-variable` (Fraunces + Hanken Grotesk). New deps: `ag-grid-community`, `ag-grid-react`, two fontsource packages (no accounts). 43 tests passing, build passing. Not yet checked by eye on a real phone/browser.
+- NEXT: Milestone 2b: signed quotes (`lib/quote.ts`), policy (`lib/policy.ts`), checkout, capture, webhook receiver, order status, buyer chat and checkout screens. Nav items for later screens are shown as disabled "Soon" entries in `components/shell/nav.ts`; make them real as each ships.
 
 ## Hard constraints
 
