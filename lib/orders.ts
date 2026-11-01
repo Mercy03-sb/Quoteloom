@@ -113,6 +113,11 @@ export function checkoutPath(orderId: string): string {
   return `/checkout/${orderId}`;
 }
 
+/** Public buyer receipt. The unguessable order id is the only credential. */
+export function receiptPath(orderId: string): string {
+  return `/receipt/${orderId}`;
+}
+
 /** Verify the quote (signature + expiry), then create the PayPal order. One order per quote. */
 export async function createCheckout(
   db: DB,
@@ -138,15 +143,16 @@ export async function createCheckout(
   checkQuantity(quote.qty, product?.stock ?? 0, rules);
 
   const orderId = `ord_${randomBytes(12).toString("hex")}`;
-  const page = `${baseUrl}${checkoutPath(orderId)}`;
+  const page = `${baseUrl}${checkoutPath(orderId)}`; // simulated approval page
+  const receiptUrl = `${baseUrl}${receiptPath(orderId)}`; // where PayPal sends the buyer back: a public receipt, not the merchant UI
   const created = await createOrder(
     {
       amountCents: quote.total_cents,
       currency: quote.currency,
       description: `${quote.qty} x ${quote.sku}`,
       referenceId: orderId,
-      returnUrl: `${page}?paypal=return`,
-      cancelUrl: `${page}?paypal=cancel`,
+      returnUrl: `${receiptUrl}?paypal=return`,
+      cancelUrl: `${receiptUrl}?paypal=cancel`,
     },
     { env: opts.env, client: opts.client },
   );
@@ -170,8 +176,22 @@ export async function createCheckout(
   };
 }
 
-/** Capture an approved order and mark it PAID. Idempotent for already-paid orders. */
-export async function captureCheckout(db: DB, orderId: string, opts: Opts = {}): Promise<OrderRecord> {
+const inflight = new Map<string, Promise<OrderRecord>>();
+
+/**
+ * Capture an approved order and mark it PAID. Idempotent for already-paid orders, and safe when the buyer's
+ * return and the CHECKOUT.ORDER.APPROVED webhook arrive together: concurrent callers share one capture, and
+ * the status change is forward-only, so stock is taken once and PayPal sees one idempotent request.
+ */
+export function captureCheckout(db: DB, orderId: string, opts: Opts = {}): Promise<OrderRecord> {
+  const running = inflight.get(orderId);
+  if (running) return running;
+  const p = doCapture(db, orderId, opts).finally(() => inflight.delete(orderId));
+  inflight.set(orderId, p);
+  return p;
+}
+
+async function doCapture(db: DB, orderId: string, opts: Opts): Promise<OrderRecord> {
   const order = loadOrder(db, orderId);
   if (!order) throw new OrderError("unknown_order", "No such order.");
   if (order.status === "PAID") return order;

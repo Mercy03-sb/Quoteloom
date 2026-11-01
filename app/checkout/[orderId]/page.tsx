@@ -100,6 +100,7 @@ export default async function CheckoutPage({
           />
           <div className="row">
             <Link className="btn btn-secondary btn-sm" href={`/quote/${order.quote_id}`}>View signed quote</Link>
+            <Link className="btn btn-ghost btn-sm" href={`/receipt/${order.id}`}>Buyer receipt</Link>
             <Link className="btn btn-ghost btn-sm" href="/chat">Back to buyer chat</Link>
           </div>
         </div>

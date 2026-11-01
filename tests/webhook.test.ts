@@ -56,14 +56,14 @@ describe("webhook receiver (simulation mode)", () => {
     const a = signed(capture("E1", c.paypal_order_id));
     await handlePaypalWebhook(db, a.raw, a.headers, { env });
     const late = signed({ id: "E2", event_type: "CHECKOUT.ORDER.APPROVED", resource: { id: c.paypal_order_id } });
-    expect((await handlePaypalWebhook(db, late.raw, late.headers, { env })).body).toMatchObject({ outcome: "no_change" });
+    expect((await handlePaypalWebhook(db, late.raw, late.headers, { env })).body).toMatchObject({ outcome: "already_settled" });
     expect(loadOrder(db, c.order_id)?.status).toBe("PAID");
   });
-  it("applies APPROVED, and REFUNDED after PAID", async () => {
+  it("APPROVED captures the payment (PAID), a later capture event changes nothing, and REFUNDED follows", async () => {
     const { db, c } = await order();
     const ap = signed({ id: "E1", event_type: "CHECKOUT.ORDER.APPROVED", resource: { id: c.paypal_order_id } });
-    await handlePaypalWebhook(db, ap.raw, ap.headers, { env });
-    expect(loadOrder(db, c.order_id)?.status).toBe("APPROVED");
+    expect((await handlePaypalWebhook(db, ap.raw, ap.headers, { env })).body).toMatchObject({ outcome: "captured" });
+    expect(loadOrder(db, c.order_id)?.status).toBe("PAID");
     const paid = signed(capture("E2", c.paypal_order_id));
     await handlePaypalWebhook(db, paid.raw, paid.headers, { env });
     const ref = signed({ ...capture("E3", c.paypal_order_id), event_type: "PAYMENT.CAPTURE.REFUNDED" });
@@ -186,7 +186,7 @@ describe("webhook console line and audit log", () => {
     const log = orderEvents(db, c.order_id);
     const details = log.filter((e) => e.type.startsWith("webhook")).map((e) => e.detail);
     expect(details).toEqual([
-      "Webhook received: CHECKOUT.ORDER.APPROVED, signature valid, status_APPROVED",
+      "Webhook received: CHECKOUT.ORDER.APPROVED, signature valid, captured",
       "Webhook received again: CHECKOUT.ORDER.APPROVED, signature valid, duplicate ignored",
     ]);
   });

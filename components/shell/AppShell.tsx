@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Badge, ToastProvider } from "@/components/ui";
-import { isActive, NAV_ITEMS } from "./nav";
+import { isActive, isPublicPath, NAV_ITEMS } from "./nav";
 import { ThemeToggle } from "./ThemeToggle";
 
 function Mark() {
@@ -18,6 +18,22 @@ export function AppShell({ badges, children }: { badges: ReactNode; children: Re
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
+
+  // Public pages (the buyer receipt) get their own minimal layout: no sidebar, no merchant navigation or badges.
+  if (isPublicPath(pathname)) {
+    return (
+      <ToastProvider>
+        <div className="public-shell">
+          <header className="public-head">
+            <Mark />
+            <span className="brand-name">Quoteloom</span>
+          </header>
+          <main className="public-main">{children}</main>
+          <footer className="public-foot stat-note">Demo store. Sandbox payments only, no real money.</footer>
+        </div>
+      </ToastProvider>
+    );
+  }
 
   return (
     <ToastProvider>

@@ -321,3 +321,11 @@ a { color: var(--c-accent); }
 .offer-panel { display: flex; flex-direction: column; gap: var(--sp-3); padding-top: var(--sp-3); border-top: 1px dashed var(--c-border); }
 .offer-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-3); }
 .check-list li[data-active="true"] { font-weight: 600; }
+
+/* ---------- Public buyer receipt ---------- */
+.public-shell { min-height: 100vh; display: flex; flex-direction: column; }
+.public-head { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--c-border); }
+.public-main { flex: 1; display: flex; justify-content: center; padding: var(--sp-6) var(--sp-4); }
+.public-foot { text-align: center; padding: var(--sp-4); margin: 0; }
+.receipt-card { width: 100%; max-width: 560px; }
+.receipt-title { margin: 0; }

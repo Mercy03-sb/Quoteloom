@@ -14,3 +14,8 @@ export function isActive(pathname: string, href: string, also: string[] = []): b
   if (also.some((a) => isActive(pathname, a))) return true;
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 }
+
+/** Pages meant for buyers, shown without the merchant shell. */
+export function isPublicPath(pathname: string | null): boolean {
+  return Boolean(pathname && (pathname === "/receipt" || pathname.startsWith("/receipt/")));
+}

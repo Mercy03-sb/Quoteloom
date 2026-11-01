@@ -134,8 +134,9 @@ export function buildShopServer(db: DB, shop: Shop, agentId: string | null, base
           total: money(c.amount_cents),
           currency: c.currency,
           approval_url: c.approval_url,
+          receipt_url: `${baseUrl}/receipt/${c.order_id}`,
           mode: c.mode === "sim" ? "simulation" : "paypal_sandbox",
-          message: "Ask the buyer to open approval_url and approve the payment, then call get_order_status.",
+          message: "Ask the buyer to open approval_url and approve the payment, then call get_order_status. After paying, PayPal returns the buyer to receipt_url.",
         });
       } catch (err) {
         return fail(err);

@@ -49,6 +49,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         </div>
         <div className="row">
           <Badge tone={TONE[order.status]} dot>{order.status}</Badge>
+          <Link className="btn btn-ghost btn-sm" href={`/receipt/${order.id}`}>Buyer receipt</Link>
           <Link className="btn btn-secondary btn-sm" href="/orders">All orders</Link>
         </div>
       </div>

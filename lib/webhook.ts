@@ -2,7 +2,8 @@
 import { createHmac } from "node:crypto";
 import type { DB } from "./db";
 import { handleDisputeEvent } from "./disputes";
-import { findOrderByPaypalId, logEvent, loadOrder, setStatus, type OrderStatus } from "./orders";
+import type { Client } from "@paypal/paypal-server-sdk";
+import { captureCheckout, findOrderByPaypalId, logEvent, loadOrder, OrderError, setStatus, type OrderStatus } from "./orders";
 import { SIM_SIGNATURE_HEADER, simWebhookSignature, valueToCents, verifyWebhook, type WebhookHeaders } from "./paypal";
 import { signingSecret } from "./quote";
 
@@ -49,7 +50,7 @@ export async function handlePaypalWebhook(
   db: DB,
   rawBody: string,
   headers: WebhookHeaders,
-  opts: { env?: Env; fetchImpl?: typeof fetch } = {},
+  opts: { env?: Env; fetchImpl?: typeof fetch; client?: Client } = {},
 ): Promise<WebhookResult> {
   const env = opts.env ?? process.env;
   const valid = await verifyWebhook({ headers, rawBody, simSecret: simWebhookSecret(env), env, fetchImpl: opts.fetchImpl });
@@ -106,11 +107,30 @@ export async function handlePaypalWebhook(
     outcome = "amount_mismatch_ignored";
   } else {
     outcome = setStatus(db, order, target, `webhook:${event.event_type}`) ? `status_${target}` : "no_change";
+    if (target === "APPROVED") outcome = await captureApproved(db, order.id, outcome, { env, client: opts.client });
   }
 
   logEvent(db, "webhook", { id: event.id, event_type: event.event_type, order_id: order?.id ?? null, outcome, signature: "valid" });
   logWebhookLine(event.event_type, true, false);
   return { status: 200, body: { received: true, outcome } };
+}
+
+/**
+ * The buyer approved at PayPal: capture now, so the order completes even if the buyer never returns to us.
+ * Skips orders that are already settled (the return handler may have won the race). A failed capture is
+ * recorded in the outcome and never fails the webhook; the return handler or a later capture event can still finish the order.
+ */
+async function captureApproved(db: DB, orderId: string, prior: string, opts: { env: Env; client?: Client }): Promise<string> {
+  const before = loadOrder(db, orderId);
+  if (!before || (before.status !== "CREATED" && before.status !== "APPROVED")) return prior === "no_change" ? "already_settled" : prior;
+  try {
+    await captureCheckout(db, orderId, opts);
+    return "captured";
+  } catch (e) {
+    const code = e instanceof OrderError ? e.code : "error";
+    logEvent(db, "order.capture_on_approval_failed", { order_id: orderId, code, error: (e as Error).message });
+    return `capture_failed:${code}`;
+  }
 }
 
 /** Sim mode only: deliver a signed PAYMENT.CAPTURE.COMPLETED to the receiver, as PayPal would. */

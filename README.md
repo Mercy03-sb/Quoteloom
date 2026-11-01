@@ -60,9 +60,15 @@ To use it from Claude Desktop, add it as a remote MCP server. Claude Desktop rea
 
 Quotes are signed with HMAC-SHA256 using `QUOTE_SIGNING_SECRET` (a random per-process secret if unset, so quotes die on restart like the DB). A tampered or expired quote is refused by `create_checkout`.
 
+### Buyer receipt and completing payment
+
+PayPal sends the buyer back to `/receipt/{order_id}`, a **public buyer receipt** with its own minimal layout (no sidebar or merchant navigation): shop name, "Payment received" or the right status (pending, processing, failed, refunded, cancelled), item, quantity, unit price, total, order id, and a note that the buyer's assistant can check it with `get_order_status`. It shows nothing merchant-side (no cost, floor, margin, rules, audit log or webhook events); the unguessable order id is its only credential. The audit log, webhook events and merchant links live on the merchant-only `/orders/{id}`. `create_checkout` also returns a `receipt_url`. The simulated approval page is still `/checkout/{id}`.
+
+An order is completed by **either** path, whichever happens first: the buyer's return (the receipt page asks the server to capture, then refreshes until the status settles) or the signed `CHECKOUT.ORDER.APPROVED` webhook, which captures the payment itself so the order is paid even if the buyer never returns. Capturing is idempotent: concurrent callers share one capture, the PayPal request uses a fixed request id, status only moves forward, and stock is taken once. A failed capture on the webhook is logged and acknowledged (200); the return handler can still finish the order. `get_order_status` reports `PAID` after either path.
+
 ### Webhooks
 
-`POST /api/webhooks/paypal` verifies the signature before touching anything: in sandbox mode through PayPal's verify-webhook-signature API (needs `PAYPAL_WEBHOOK_ID`; without it every webhook is rejected), in simulation mode through an HMAC header that the app's own simulated webhooks carry. Events are deduplicated by id and order status only moves forward, so a late or repeated event cannot undo a payment.
+`POST /api/webhooks/paypal` verifies the signature before touching anything: in sandbox mode through PayPal's verify-webhook-signature API (needs `PAYPAL_WEBHOOK_ID`; without it every webhook is rejected), in simulation mode through an HMAC header that the app's own simulated webhooks carry. `CHECKOUT.ORDER.APPROVED` also triggers the capture (see above). Events are deduplicated by id and order status only moves forward, so a late or repeated event cannot undo a payment.
 
 `/api/dev/*` routes are 404 in production unless `ALLOW_DEV_ROUTES=1`.
 
