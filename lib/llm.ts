@@ -3,13 +3,14 @@
 // The model only drafts or proposes; it never sets a price that the app commits to.
 // On a 429 or 503 the call moves to the next model in FALLBACK_MODELS; a model that answered 429 rests for a while (see cooldowns).
 import { createHash } from "node:crypto";
+import { canCall, recordCall, type CallSource } from "./budget";
 import type { DB } from "./db";
 
 type Env = Record<string, string | undefined>;
 
 export type LlmFailure = {
   ok: false;
-  reason: "no_key" | "rate_limited" | "cooldown" | "http_error" | "network" | "empty";
+  reason: "no_key" | "budget" | "rate_limited" | "cooldown" | "http_error" | "network" | "empty";
   /** HTTP status, when the API answered. */
   status?: number;
   /** Error code or status string from the response body (for example NOT_FOUND), or a network error code. */
@@ -34,6 +35,7 @@ export function redact(text: string, key: string | undefined): string {
 /** One line for the server log, for example "Gemini 404: model not found (NOT_FOUND)". Not for the browser: see failureToError. */
 export function describeFailure(f: LlmFailure): string {
   if (f.reason === "no_key") return "Gemini has no API key";
+  if (f.reason === "budget") return "Gemini daily call budget used";
   if (f.reason === "cooldown") return "Gemini paused after a rate limit; retrying shortly";
   const head = f.status ? `Gemini ${f.status}` : "Gemini request failed";
   const msg = f.detail ? `: ${f.detail}` : f.reason === "network" ? ": could not reach the API" : "";
@@ -92,6 +94,8 @@ export type GenerateOptions = {
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
   now?: () => number;
+  /** Whose quota this call counts against (lib/budget.ts). Default "app" (playground, shop setup). */
+  source?: CallSource;
 };
 
 /** Ask Gemini for JSON text. Cached by hash of (model, system, input); failures are never cached. Falls back across models on 429/503. */
@@ -109,7 +113,7 @@ export async function generateJson(o: GenerateOptions): Promise<LlmResult> {
     contents: [{ role: "user", parts: [{ text: o.input }] }],
     generationConfig: { responseMimeType: "application/json", temperature: 0 },
   });
-  const r = await runChain(env, key, body, o.timeoutMs ?? 12_000, o.fetchImpl, (o.now ?? Date.now)(), (json, status) => {
+  const r = await runChain(env, key, body, o.timeoutMs ?? 12_000, o.fetchImpl, (o.now ?? Date.now)(), o.source ?? "app", (json, status) => {
     const parsed = json as { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[]; promptFeedback?: { blockReason?: string } };
     const text = parsed.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
     if (text.trim()) return { text };
@@ -139,6 +143,7 @@ async function runChain(
   timeoutMs: number,
   fetchImpl: typeof fetch | undefined,
   now: number,
+  source: CallSource,
   parse: (json: unknown, status: number) => Parsed | Rejection,
 ): Promise<Chained> {
   let last: LlmFailure | undefined;
@@ -146,7 +151,9 @@ async function runChain(
   for (const model of modelChain(env)) {
     if (attempts >= MAX_ATTEMPTS) break;
     if (coolingDown(model, now)) continue;
+    if (!canCall(source, env, now)) return { ok: false, reason: "budget", attempts };
     attempts += 1;
+    recordCall(source, now); // every real call counts, fallbacks included
     const r = await post(model, key, body, timeoutMs, fetchImpl, now);
     if (r.ok) {
       const parsed = parse(r.json, r.status);
@@ -225,6 +232,8 @@ export type TurnOptions = {
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
   now?: () => number;
+  /** Whose quota this call counts against (lib/budget.ts). Default "app". */
+  source?: CallSource;
 };
 
 /**
@@ -235,7 +244,7 @@ export async function generateTurn(o: TurnOptions): Promise<TurnResult> {
   const env = o.env ?? process.env;
   const key = geminiKey(env);
   if (!key) return { ok: false, reason: "no_key" };
-  const r = await runChain(env, key, JSON.stringify(o.body), o.timeoutMs ?? 20_000, o.fetchImpl, (o.now ?? Date.now)(), (json, status) => {
+  const r = await runChain(env, key, JSON.stringify(o.body), o.timeoutMs ?? 20_000, o.fetchImpl, (o.now ?? Date.now)(), o.source ?? "app", (json, status) => {
     const body = json as {
       candidates?: { content?: { parts?: GeminiPart[] }; finishReason?: string }[];
       promptFeedback?: { blockReason?: string };

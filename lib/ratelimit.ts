@@ -2,7 +2,7 @@
 // Every costly endpoint is limited twice: per workspace and per IP.
 
 export type Limit = { max: number; windowMs: number };
-export type Bucket = "ingest" | "publish" | "chat" | "checkout" | "dispute" | "channel3" | "channel3_all" | "studio_data" | "studio_ai";
+export type Bucket = "ingest" | "publish" | "chat" | "checkout" | "dispute" | "channel3" | "channel3_all" | "studio_data" | "studio_ai" | "studio_prompt";
 
 /** Per-bucket limits. The IP limit is looser than the workspace one so shared networks still work. */
 export const LIMITS: Record<Bucket, { workspace: Limit; ip: Limit }> = {
@@ -16,6 +16,8 @@ export const LIMITS: Record<Bucket, { workspace: Limit; ip: Limit }> = {
   studio_data: { workspace: { max: 60, windowMs: 60_000 }, ip: { max: 120, windowMs: 60_000 } },
   // Each dashboard prompt can take several model turns (one per tool call), so this is looser than the free Gemini quota can sustain; Gemini 429s are handled separately.
   studio_ai: { workspace: { max: 30, windowMs: 60_000 }, ip: { max: 60, windowMs: 60_000 } },
+  // Counted once per new chat prompt (not per model turn): about 10 prompts an hour per workspace and 10 a day per IP.
+  studio_prompt: { workspace: { max: 10, windowMs: 3600_000 }, ip: { max: 10, windowMs: 24 * 3600_000 } },
   dispute: { workspace: { max: 20, windowMs: 60_000 }, ip: { max: 40, windowMs: 60_000 } },
 };
 

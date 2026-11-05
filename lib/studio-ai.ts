@@ -2,7 +2,7 @@
 // and Gemini generateContent. Pure functions: no network, no key, no database. The route in app/api/studio/ai wires them up.
 // The model only proposes tool calls; Studio runs them in the browser against the open report. Nothing here touches shop data.
 import { z } from "zod";
-import { describeFailure, type GeminiPart, type LlmFailure, type TurnResult } from "./llm";
+import { type GeminiPart, type LlmFailure, type TurnResult } from "./llm";
 
 export const MAX_BODY_BYTES = 200_000; // request size cap (conversation + tool schemas + tool results)
 export const MAX_OUTPUT_TOKENS = 4096;
@@ -148,14 +148,21 @@ export function toStudioResponse(turn: Extract<TurnResult, { ok: true }>, now = 
 
 export type StudioAiError = { status: number; code: string; message: string };
 
-/** A short, plain, key-free message for a failed Gemini call, with an HTTP status for the route. */
+/** What the browser shows when a limit or the daily budget is used up. Also the server's answer when it did not call Gemini at all. */
+export const RESTING_MESSAGE = "The AI assistant is resting. Use the prompt starters.";
+
+/**
+ * A short, plain message for a failed Gemini call, with an HTTP status for the route. Never contains raw Google error text,
+ * model names or the key: the real error is in the server log (lib/llm.ts).
+ */
 export function failureToError(f: LlmFailure): StudioAiError {
-  if (f.reason === "no_key") return { status: 503, code: "ai_off", message: "The AI assistant is off: this server has no Gemini API key." };
+  if (f.reason === "no_key") return { status: 503, code: "ai_off", message: "The AI assistant is off here (no Gemini key is set up). Use the prompt starters." };
+  if (f.reason === "budget" || f.daily) return { status: 429, code: "ai_resting", message: RESTING_MESSAGE };
   if (f.reason === "rate_limited" || f.reason === "cooldown" || f.status === 429) {
-    return { status: 503, code: "ai_busy", message: "The AI model is rate limited right now (free tier). Try again in a minute." };
+    return { status: 503, code: "ai_busy", message: "The AI model is busy. I tried the backup models and they are busy too. Try again in a minute, or use the prompt starters." };
   }
-  if (f.status === 503 || f.status === 500) return { status: 503, code: "ai_overloaded", message: "The AI model is overloaded right now. Try again shortly." };
+  if (f.status === 503 || f.status === 500) return { status: 503, code: "ai_overloaded", message: "The AI model is overloaded right now. Try again shortly, or use the prompt starters." };
   if (f.code === "TIMEOUT") return { status: 504, code: "ai_timeout", message: "The AI model took too long to answer. Try again, or use a prompt starter." };
   if (f.reason === "empty") return { status: 502, code: "ai_empty", message: "The AI model returned no answer. Try rephrasing." };
-  return { status: 502, code: "ai_failed", message: `The AI model could not be reached (${describeFailure(f)}).` };
+  return { status: 502, code: "ai_failed", message: "The AI assistant is unavailable right now. Use the prompt starters." };
 }

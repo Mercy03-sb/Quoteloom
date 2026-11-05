@@ -1,14 +1,27 @@
 "use client";
 
-import { AgStudioAiModule, createAiHarness, type AgAiHarnessSetup, type AgDataSourcesDefinition, type AgReportState, type AgStudioApi } from "ag-studio";
+import { AgStudioAiModule, createAiHarness, directLlmRunner, type AgAiHarnessSetup, type AgDataSourcesDefinition, type AgReportState, type AgStudioApi } from "ag-studio";
 import { AgStudio, AgStudioProvider } from "ag-studio-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_REPORT, PROMPT_STARTERS } from "@/lib/studio-report";
 import { STUDIO_FIELDS, STUDIO_TABLES, STUDIO_TABLE_NAMES } from "@/lib/studio-fields";
+import { MAX_TURNS_PER_PROMPT } from "@/lib/studio-limits";
 import { createStudioAdapter } from "./adapter";
 import { checkLicence } from "./licence";
 
 const MODULES = [AgStudioAiModule];
+
+/** The single agent: no delegation, no planning tools, and at most 3 rounds (the route enforces the same cap). */
+const ANALYST = {
+  id: "analyst",
+  name: "Analyst",
+  maxTurns: MAX_TURNS_PER_PROMPT,
+  defaultToolCalls: () => [{ tool: "view_schema" }], // the data schema is in the first request, so the model need not ask for it
+  instructions: () =>
+    "You build and change dashboards over the Quoteloom tables. The schema is already in the conversation. " +
+    "Work in as few steps as possible: call every tool you need in one step (for example run the query and add the widget together), " +
+    "then reply in one or two sentences. You get 3 steps in total, so do not explore.",
+};
 
 /** Data source: every table is fetched from our own route, which scopes it to this workspace and shop. */
 function dataFor(shop: string): AgDataSourcesDefinition {
@@ -44,15 +57,25 @@ export default function StudioView({ shop, licenceKey, onUnavailable }: StudioVi
   const apiRef = useRef<AgStudioApi | undefined>(undefined);
   const [modelOn, setModelOn] = useState<boolean | null>(null);
 
-  // The chat is a normal Studio chat whose model is Gemini, reached through our own route (the key stays on the server).
+  // The chat is a Studio chat whose model is Gemini, reached through our own route (the key stays on the server).
+  // One agent replaces the five built-ins (lead, data, page, planning, widget): they delegate to each other, which cost about 10 model
+  // calls per prompt. This one has only query, widget and filter tools, is handed the schema up front, and may take 3 rounds at most.
   const ai = useMemo<AgAiHarnessSetup>(
     () =>
       ({ api }) =>
         // The setup callback's typing says AgCoreStudioApi; at runtime it is the full Studio API (as in the docs' examples).
-        createAiHarness(api as AgStudioApi, {
-          adapter: createStudioAdapter({ getApi: () => apiRef.current }),
+        createAiHarness(api as AgStudioApi, ({ tools: { studio } }) => ({
+          agents: [
+            directLlmRunner({
+              ...ANALYST,
+              schema: (s) => s.undefined(), // a primary agent runs with no parameters
+              adapter: createStudioAdapter({ getApi: () => apiRef.current }),
+              tools: () => [studio.viewPage(), studio.executeQuery(), studio.addWidget(), studio.addPageFilter(), studio.addWidgetFilter(), studio.viewSchema()],
+            }),
+          ],
+          primary: ANALYST.id,
           promptStarters: PROMPT_STARTERS.map(({ label, prompt }) => ({ label, prompt })),
-        }),
+        })),
     [],
   );
 

@@ -1,7 +1,9 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { GET, POST } from "@/app/api/studio/ai/route";
 import { createStudioAdapter } from "@/components/studio/adapter";
+import { resetBudget } from "@/lib/budget";
 import { resetLlmCooldown } from "@/lib/llm";
+import { resetPrompts } from "@/lib/studio-prompts";
 import { MAX_BODY_BYTES, StudioAiRequest, toGeminiBody, toStudioResponse } from "@/lib/studio-ai";
 import { PROMPT_STARTERS } from "@/lib/studio-report";
 import { installTestDb } from "./helpers";
@@ -28,6 +30,9 @@ let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   installTestDb();
   resetLlmCooldown();
+  resetBudget();
+  resetPrompts();
+  vi.spyOn(console, "info").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.stubEnv("GEMINI_API_KEY", KEY);
   vi.stubEnv("GEMINI_MODEL", "");
@@ -67,19 +72,19 @@ describe("/api/studio/ai", () => {
   });
 
   it("rate limits per workspace and per IP", async () => {
+    // Continuation turns (a tool result going back) never start a prompt, so only the general per-minute limiter counts them.
+    const cont = () => baseReq({ input: [userMsg("x"), { type: "function_call_output", callId: "c1", output: "{}", status: "completed" }] });
+    const isLimited = async (r: Response) => (await r.json()).error === "rate_limited";
     const cookie = `ql_ws=ws_${"a".repeat(32)}`;
-    let last = 200;
-    for (let i = 0; i < 31; i++) last = (await post(baseReq(), `10.0.0.${i}`, cookie)).status; // distinct IPs: the workspace limit bites
-    expect(last).toBe(429);
-    const limited = await post(baseReq(), "10.9.9.9", cookie);
+    for (let i = 0; i < 30; i++) expect(await isLimited(await post(cont(), `10.0.0.${i}`, cookie))).toBe(false); // distinct IPs: the workspace limit bites
+    const limited = await post(cont(), "10.9.9.9", cookie);
     expect(limited.status).toBe(429);
     expect(limited.headers.get("retry-after")).toBeTruthy();
     expect(await limited.text()).not.toContain(KEY);
 
     installTestDb(); // resets limits
-    for (let i = 0; i < 60; i++) last = (await post(baseReq(), "8.8.8.8")).status; // no cookie: the IP limit bites
-    expect(last).toBe(200);
-    expect((await post(baseReq(), "8.8.8.8")).status).toBe(429);
+    for (let i = 0; i < 60; i++) expect(await isLimited(await post(cont(), "8.8.8.8"))).toBe(false); // no cookie: the IP limit bites
+    expect(await isLimited(await post(cont(), "8.8.8.8"))).toBe(true);
   });
 
   it("handles Gemini overload (503), with a clear message and no key", async () => {
@@ -111,7 +116,7 @@ describe("/api/studio/ai", () => {
     vi.stubEnv("GEMINI_API_KEY", "");
     const res = await post(baseReq());
     expect(res.status).toBe(503);
-    expect((await res.json()).error).toMatchObject({ code: "ai_off", message: expect.stringContaining("no Gemini API key") });
+    expect((await res.json()).error).toMatchObject({ code: "ai_off", message: expect.stringContaining("no Gemini key") });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -237,5 +242,46 @@ describe("browser adapter", () => {
     }) as unknown as typeof fetch;
     const r = await createStudioAdapter({ getApi: () => undefined, fetchImpl }).executeTurn(request("x"), { signal: ctl.signal }).complete;
     expect(r.status).toBe("cancelled");
+  });
+});
+
+describe("one prompt takes at most 3 model turns", () => {
+  const toolOut = (id: string) => ({ type: "function_call_output", callId: id, output: "{}", status: "completed" });
+  const fc = (id: string) => ({ id, kind: "output", type: "function_call", callId: id, name: "add_widget", arguments: "{}", status: "completed" });
+  const turn = (n: number) => baseReq({ input: [userMsg("Show orders by status"), ...Array.from({ length: n }, (_, i) => fc(`c${i}`)), ...(n ? [toolOut(`c${n - 1}`)] : [])] });
+  const toolModes = () => fetchMock.mock.calls.map(([, init]) => JSON.parse(String((init as RequestInit).body)).toolConfig?.functionCallingConfig?.mode);
+
+  it("forces a text answer on the third turn and refuses a fourth without calling Gemini", async () => {
+    fetchMock.mockImplementation(async () => geminiOk([{ functionCall: { name: "add_widget", args: {} } }]));
+    expect((await post(turn(0))).status).toBe(200);
+    expect((await post(turn(1))).status).toBe(200);
+    fetchMock.mockImplementation(async () => geminiOk([{ text: "Done." }]));
+    expect((await post(turn(2))).status).toBe(200);
+    expect(toolModes()).toEqual(["AUTO", "AUTO", "NONE"]); // turn 3 may not call tools
+    const fourth = await post(turn(3));
+    expect(fourth.status).toBe(429);
+    expect((await fourth.json()).error.code).toBe("ai_turn_cap");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("logs counts per turn and per prompt, never the prompt, the answer or the key", async () => {
+    const info = console.info as unknown as { mock: { calls: unknown[][] } };
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ functionCall: { name: "add_widget", args: {} } }] } }], usageMetadata: { promptTokenCount: 1234, candidatesTokenCount: 20 } }), { status: 200 }));
+    await post(turn(0));
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "SECRET ANSWER TEXT" }] } }], usageMetadata: { promptTokenCount: 1500, candidatesTokenCount: 30 } }), { status: 200 }));
+    await post(turn(1));
+    const lines = info.mock.calls.map((c) => String(c[0]));
+    expect(lines[0]).toMatch(/^\[studio-ai\] prompt=[0-9a-f]{6} turn=1\/3 http_calls=1 input_tokens=1234 model=gemini-3\.5-flash-lite$/);
+    expect(lines[1]).toMatch(/turn=2\/3 http_calls=1 input_tokens=1500 .*prompt total: model_turns=2 http_calls=2 input_tokens=2734 output_tokens=50$/);
+    const all = lines.join("\n");
+    expect(all).not.toMatch(/orders by status|SECRET ANSWER|add_widget/);
+    expect(all).not.toContain(KEY);
+  });
+
+  it("counts fallback calls in http_calls but not as extra turns", async () => {
+    fetchMock.mockResolvedValueOnce(geminiErr(429, "RESOURCE_EXHAUSTED", "RequestsPerMinute")).mockResolvedValueOnce(geminiOk([{ text: "Hi" }]));
+    await post(turn(0));
+    const line = String((console.info as unknown as { mock: { calls: unknown[][] } }).mock.calls[0][0]);
+    expect(line).toMatch(/turn=1\/3 http_calls=2 /);
   });
 });
