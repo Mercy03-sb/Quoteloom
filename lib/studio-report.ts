@@ -26,7 +26,13 @@ const page = (id: string, parts: Record<string, { w: Widget; l: ReturnType<typeo
     widgetLayout: Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, v.l])),
   }) as Page;
 
-const report = (p: Page): AgReportState => ({ pages: [p], selectedPageId: p.id, panels: { filters: { collapsed: true } } }) as AgReportState;
+/**
+ * Panel state (AgPanelsState: `collapsed` and `width`, keyed by panel id). The canvas is the focus: Filters, Compose (`edit`) and
+ * Data start collapsed and can be reopened from their toggles; the AI Assistant stays open but narrower than its 350 px default.
+ */
+export const DEFAULT_PANELS = { filters: { collapsed: true }, edit: { collapsed: true }, data: { collapsed: true }, ai: { width: 300 } };
+
+const report = (p: Page): AgReportState => ({ pages: [p], selectedPageId: p.id, panels: DEFAULT_PANELS }) as AgReportState;
 
 /** Sales over time, searches per agent, unmet demand grid, dispute status: the page is never empty. */
 export const DEFAULT_REPORT: AgReportState = report(

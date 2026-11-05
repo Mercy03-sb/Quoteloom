@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { seedDemoHistory } from "@/lib/demo-history";
 import { NAV_ITEMS } from "@/components/shell/nav";
+import { DEFAULT_REPORT } from "@/lib/studio-report";
 import { installTestDb } from "./helpers";
 
 vi.mock("next/headers", () => ({
@@ -50,6 +51,17 @@ const noConsoleNoise = () => {
 describe("/studio page", () => {
   it("is in the nav as Studio", () => {
     expect(NAV_ITEMS.find((n) => n.href === "/studio")?.label).toBe("Studio");
+  });
+
+  it("is wide, and the default report keeps the canvas in focus", async () => {
+    vi.stubEnv("NEXT_PUBLIC_AG_GRID_LICENSE_KEY", "");
+    expect(renderToStaticMarkup(await StudioPage(sp))).toContain('class="page page-wide"');
+    expect(DEFAULT_REPORT.panels).toMatchObject({ edit: { collapsed: true }, data: { collapsed: true }, filters: { collapsed: true }, ai: { width: 300 } });
+    expect(DEFAULT_REPORT.panels?.ai?.collapsed).toBeUndefined(); // the assistant stays open, just narrower
+    // four widgets, all within the 24-track grid, so nothing needs horizontal scrolling
+    const layout = Object.values(DEFAULT_REPORT.pages[0].widgetLayout ?? {});
+    expect(layout).toHaveLength(4);
+    for (const l of layout) expect((l?.xTrack ?? 0) + (l?.xSpan ?? 99)).toBeLessThanOrEqual(24);
   });
 
   it("without a licence key renders the AG Grid Community analytics with a notice, and no console output", async () => {

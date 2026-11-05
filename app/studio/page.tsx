@@ -26,7 +26,7 @@ export default async function StudioPage({ searchParams }: { searchParams: Promi
   const analytics = await loadAnalytics(db, shop.id, clientIp(await headers()));
 
   return (
-    <div className="page">
+    <div className="page page-wide">
       <div className="page-head">
         <div>
           <h1>Studio</h1>

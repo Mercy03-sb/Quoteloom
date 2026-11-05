@@ -36,7 +36,7 @@ export function StudioGate({ shop, fallback }: { shop: string; fallback: ReactNo
   const shown: Unavailable | null = reason ?? (small ? "small" : null);
   if (shown) {
     return (
-      <div className="stack" data-testid="studio-fallback" data-reason={shown}>
+      <div className="stack studio-fallback" data-testid="studio-fallback" data-reason={shown}>
         <div className="notice" data-tone="warning" role="status">{NOTICES[shown]}</div>
         {fallback}
       </div>
