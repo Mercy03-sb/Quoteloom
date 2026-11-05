@@ -38,3 +38,17 @@ export const DEMO_PRODUCTS: SeedProduct[] = [
   { sku: "LT-APRON-LIN", title: "Linen apron", description: "Cross-back linen apron with two pockets.", price_cents: 3900, stock: 12, attrs: { material: "linen", cost_cents: 1600 } },
   { sku: "LT-WEAVE-KIT", title: "Beginner weaving kit", description: "Wooden frame loom kit with yarn, shuttle and comb. Great gift.", price_cents: 6400, stock: 7, attrs: { cost_cents: 3000 } },
 ];
+
+/** Queries buyers asked that the demo shop cannot answer. Used by the demo history seed and the Channel3 snapshot. */
+export const DEMO_UNMET_QUERIES = [
+  "ceramic mug",
+  "leather wallet",
+  "wool socks",
+  "cashmere sweater",
+  "silk pillowcase",
+  "scented candle",
+  "knitting needles",
+  "wicker basket",
+  "bamboo cutting board",
+  "glass water bottle",
+];

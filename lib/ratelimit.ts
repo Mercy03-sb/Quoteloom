@@ -2,7 +2,7 @@
 // Every costly endpoint is limited twice: per workspace and per IP.
 
 export type Limit = { max: number; windowMs: number };
-export type Bucket = "ingest" | "publish" | "chat" | "checkout" | "dispute";
+export type Bucket = "ingest" | "publish" | "chat" | "checkout" | "dispute" | "channel3" | "channel3_all";
 
 /** Per-bucket limits. The IP limit is looser than the workspace one so shared networks still work. */
 export const LIMITS: Record<Bucket, { workspace: Limit; ip: Limit }> = {
@@ -10,6 +10,9 @@ export const LIMITS: Record<Bucket, { workspace: Limit; ip: Limit }> = {
   publish: { workspace: { max: 10, windowMs: 10 * 60_000 }, ip: { max: 20, windowMs: 10 * 60_000 } },
   chat: { workspace: { max: 60, windowMs: 60_000 }, ip: { max: 120, windowMs: 60_000 } },
   checkout: { workspace: { max: 10, windowMs: 60_000 }, ip: { max: 20, windowMs: 60_000 } },
+  // Live Channel3 calls cost credits: per workspace, per IP, and one global daily cap (called with fixed ids "all").
+  channel3: { workspace: { max: 20, windowMs: 10 * 60_000 }, ip: { max: 40, windowMs: 10 * 60_000 } },
+  channel3_all: { workspace: { max: 300, windowMs: 24 * 3600_000 }, ip: { max: 300, windowMs: 24 * 3600_000 } },
   dispute: { workspace: { max: 20, windowMs: 60_000 }, ip: { max: 40, windowMs: 60_000 } },
 };
 

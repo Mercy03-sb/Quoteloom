@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "seed": "tsx scripts/seed.ts",
+    "snapshot:channel3": "tsx scripts/build-channel3-snapshot.ts",
     "check:gemini": "tsx scripts/check-gemini.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

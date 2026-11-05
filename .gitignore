@@ -1,7 +1,8 @@
 node_modules/
 .next/
 out/
-data/
+data/*
+!data/channel3-snapshot.json
 *.db
 *.db-journal
 .env

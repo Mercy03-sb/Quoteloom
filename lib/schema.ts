@@ -88,6 +88,12 @@ CREATE TABLE IF NOT EXISTS events (
   payload_json TEXT NOT NULL DEFAULT '{}',
   ts TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Channel3 results by normalised query. Not in TABLES, so not wiped on boot: a restart should not cost credits.
+CREATE TABLE IF NOT EXISTS channel3_cache (
+  query TEXT PRIMARY KEY,
+  products_json TEXT NOT NULL,
+  fetched_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS llm_cache (
   hash TEXT PRIMARY KEY,
   response_json TEXT NOT NULL
