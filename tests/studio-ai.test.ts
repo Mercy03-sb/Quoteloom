@@ -92,7 +92,7 @@ describe("/api/studio/ai", () => {
   });
 
   it("handles a Gemini rate limit, a timeout, a network failure and an empty answer", async () => {
-    fetchMock.mockResolvedValueOnce(geminiErr(429, "RESOURCE_EXHAUSTED", "Quota exceeded"));
+    for (let i = 0; i < 4; i++) fetchMock.mockResolvedValueOnce(geminiErr(429, "RESOURCE_EXHAUSTED", "Quota exceeded")); // every fallback model is limited
     expect((await (await post(baseReq())).json()).error.code).toBe("ai_busy");
     resetLlmCooldown();
     fetchMock.mockRejectedValueOnce(Object.assign(new Error("timeout"), { name: "TimeoutError" }));
@@ -172,7 +172,7 @@ describe("request and response translation", () => {
   });
 
   it("marks a cut-off answer incomplete", () => {
-    const r = toStudioResponse({ ok: true, model: "m", parts: [{ text: "partial" }], finishReason: "MAX_TOKENS" });
+    const r = toStudioResponse({ ok: true, model: "m", parts: [{ text: "partial" }], finishReason: "MAX_TOKENS", usage: { inputTokens: 0, outputTokens: 0 }, attempts: 1 });
     expect(r).toMatchObject({ status: "incomplete", incompleteDetails: { reason: "max_output_tokens" } });
   });
 });

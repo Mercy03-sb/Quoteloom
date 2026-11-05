@@ -268,7 +268,7 @@ describe("pipeline", () => {
       const opts = { fetchPage: page, selfOrigin: null, env: { GEMINI_API_KEY: "k" }, fetchImpl: limited as unknown as typeof fetch };
       await ingestUrl(db(), "https://shop.example/", opts);
       await ingestUrl(db(), "https://shop.example/", opts);
-      expect(limited).toHaveBeenCalledTimes(1); // second run did not hit the API during the cooldown
+      expect(limited).toHaveBeenCalledTimes(4); // one call per fallback model; the second run hit no API while all four rested
     });
 
     it("never calls the network without a key", async () => {

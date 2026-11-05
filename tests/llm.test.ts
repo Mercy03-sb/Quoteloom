@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb } from "@/lib/db";
-import { describeFailure, generateJson, redact, resetLlmCooldown } from "@/lib/llm";
+import { coolingModels, describeFailure, generateJson, modelChain, redact, resetLlmCooldown } from "@/lib/llm";
 import { ingestUrl, type PageFetcher } from "@/lib/ingest/pipeline";
 
 // Built at runtime so no key-shaped literal appears in source (GitHub secret scanning).
@@ -106,5 +106,75 @@ describe("ingest banner shows the real Gemini error", () => {
     });
     expect(r.warnings).toContain("Gemini 404: model not found (NOT_FOUND); used the rule-based parser.");
     expect(r.methods.rules).toBe(1);
+  });
+});
+
+describe("model fallback and cooldown", () => {
+  const ok = () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "{}" }] } }] }), { status: 200 });
+  const modelOf = (url: string) => /models\/([^:]+):/.exec(url)?.[1];
+  const preferred = { GEMINI_API_KEY: KEY, GEMINI_MODEL: "" };
+  const at = (now: number) => ({ db: openDb(":memory:"), system: "s", input: `i${now}${Math.random()}`, env: preferred, now: () => now });
+
+  it("lists the chain with the preferred model first and no repeats", () => {
+    expect(modelChain({ GEMINI_MODEL: "" })).toEqual(["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.6-flash", "gemini-3.8-flash"]);
+    expect(modelChain({ GEMINI_MODEL: "gemini-3.6-flash" })).toEqual(["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash"]);
+  });
+
+  it("moves to the next model on a 429, then on a 503, in the documented order", async () => {
+    const seen: (string | undefined)[] = [];
+    const f = async (url: string) => {
+      seen.push(modelOf(url));
+      if (seen.length === 1) return apiError(429, "RESOURCE_EXHAUSTED", "Quota exceeded: RequestsPerMinute");
+      if (seen.length === 2) return apiError(503, "UNAVAILABLE", "overloaded");
+      return ok();
+    };
+    const r = await generateJson({ ...at(1_000_000), fetchImpl: f as never });
+    expect(r).toMatchObject({ ok: true, cached: false });
+    expect(seen).toEqual(["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.6-flash"]);
+  });
+
+  it("rests a 429 model for 60 s (per-minute) and does not call it again until then", async () => {
+    const seen: (string | undefined)[] = [];
+    const f = async (url: string) => {
+      seen.push(modelOf(url));
+      return modelOf(url) === "gemini-3.5-flash-lite" ? apiError(429, "RESOURCE_EXHAUSTED", "Quota exceeded for RequestsPerMinute") : ok();
+    };
+    await generateJson({ ...at(1_000_000), fetchImpl: f as never });
+    expect(coolingModels(1_000_001)).toEqual(["gemini-3.5-flash-lite"]);
+    seen.length = 0;
+    await generateJson({ ...at(1_030_000), fetchImpl: f as never });
+    expect(seen).toEqual(["gemini-3.1-flash-lite"]); // first model skipped without a call
+    seen.length = 0;
+    await generateJson({ ...at(1_061_000), fetchImpl: f as never });
+    expect(seen).toEqual(["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]); // tried again after 60 s
+  });
+
+  it("rests a model with a daily quota until the next UTC hour", async () => {
+    const t = Date.UTC(2026, 10, 6, 10, 20, 0);
+    const f = async (url: string) =>
+      modelOf(url) === "gemini-3.5-flash-lite"
+        ? new Response(JSON.stringify({ error: { code: 429, status: "RESOURCE_EXHAUSTED", message: "Quota exceeded", details: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] } }), { status: 429 })
+        : ok();
+    await generateJson({ ...at(t), fetchImpl: f as never });
+    expect(coolingModels(t + 30 * 60_000)).toEqual(["gemini-3.5-flash-lite"]); // 10:50 still resting
+    expect(coolingModels(Date.UTC(2026, 10, 6, 11, 0, 1))).toEqual([]); // 11:00 UTC: free again
+  });
+
+  it("reports cooldown without any call when every model is resting, and the last 429 when all just failed", async () => {
+    const all429 = vi.fn(async () => apiError(429, "RESOURCE_EXHAUSTED", "Quota exceeded"));
+    const first = await generateJson({ ...at(5_000_000), fetchImpl: all429 as never });
+    expect(first).toMatchObject({ ok: false, reason: "rate_limited", status: 429 });
+    expect(all429).toHaveBeenCalledTimes(4);
+    const second = await generateJson({ ...at(5_010_000), fetchImpl: all429 as never });
+    expect(second).toMatchObject({ ok: false, reason: "cooldown" });
+    expect(all429).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not fall through on a 400 (bad key or request), and logs the model and status", async () => {
+    const f = vi.fn(async () => apiError(400, "INVALID_ARGUMENT", "API key not valid."));
+    const r = await generateJson({ ...at(7_000_000), fetchImpl: f as never });
+    expect(r).toMatchObject({ ok: false, status: 400 });
+    expect(f).toHaveBeenCalledTimes(1);
+    expect((console.warn as unknown as { mock: { calls: unknown[][] } }).mock.calls[0][0]).toMatch(/Gemini 400.*\(model=gemini-3\.5-flash-lite\)/);
   });
 });
