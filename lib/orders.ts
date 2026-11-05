@@ -59,7 +59,7 @@ const ORDER_SQL = `
          q.currency, q.sku, COALESCE(p.title, q.sku) AS title, q.qty, q.price_cents AS unit_price_cents,
          q.expires_at AS quote_expires_at, q.signature AS quote_signature, o.created_at, o.captured_at
   FROM orders o
-  JOIN quotes q ON q.id = o.quote_id
+  JOIN quotes q ON q.id = o.quote_id AND o.is_demo = 0
   JOIN shops s ON s.id = o.shop_id
   LEFT JOIN products p ON p.shop_id = o.shop_id AND p.sku = q.sku`;
 

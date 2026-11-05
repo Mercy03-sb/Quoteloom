@@ -1,9 +1,10 @@
 import type { DB } from "./db";
 import { TABLES } from "./schema";
+import { seedDemoHistory } from "./demo-history";
 import { DEMO_PRODUCTS, DEMO_SHOP } from "./seed-data";
 
 /** Wipe all tables and restore the demo state. Idempotent. */
-export function seed(db: DB): { shops: number; products: number } {
+export function seed(db: DB, opts: { demoHistory?: boolean } = {}): { shops: number; products: number } {
   const run = db.transaction(() => {
     for (const t of TABLES) db.prepare(`DELETE FROM ${t}`).run();
     const shop = db
@@ -16,6 +17,7 @@ export function seed(db: DB): { shops: number; products: number } {
     for (const p of DEMO_PRODUCTS) {
       insert.run(shop.lastInsertRowid, p.sku, p.title, p.description, p.price_cents, p.stock, JSON.stringify(p.attrs));
     }
+    if (opts.demoHistory !== false) seedDemoHistory(db, Number(shop.lastInsertRowid));
     db.prepare("INSERT INTO events (type, payload_json) VALUES (?, ?)").run(
       "seed",
       JSON.stringify({ shop: DEMO_SHOP.slug, products: DEMO_PRODUCTS.length }),

@@ -41,7 +41,7 @@ export type DisputeRow = {
 const COLS = "id, order_id, paypal_dispute_id, status, reason, amount_cents, currency, simulated, paypal_status, created_at, submitted_at, submission_json, evidence_json";
 
 export function loadDispute(db: DB, id: string): DisputeRow | undefined {
-  return db.prepare(`SELECT ${COLS} FROM disputes WHERE id = ?`).get(id) as DisputeRow | undefined;
+  return db.prepare(`SELECT ${COLS} FROM disputes WHERE id = ? AND is_demo = 0`).get(id) as DisputeRow | undefined;
 }
 
 function toPacketDispute(d: DisputeRow): PacketDispute {
@@ -216,7 +216,7 @@ export function listDisputes(db: DB, shopIds: number[]): DisputeListItem[] {
               d.created_at, d.submitted_at, d.submission_json, '{}' AS evidence_json, s.slug AS shop_slug, COALESCE(p.title, q.sku) AS title
        FROM disputes d JOIN orders o ON o.id = d.order_id JOIN quotes q ON q.id = o.quote_id JOIN shops s ON s.id = o.shop_id
        LEFT JOIN products p ON p.shop_id = o.shop_id AND p.sku = q.sku
-       WHERE o.shop_id IN (${marks}) ORDER BY d.rowid DESC`,
+       WHERE o.shop_id IN (${marks}) AND d.is_demo = 0 AND o.is_demo = 0 ORDER BY d.rowid DESC`,
     )
     .all(...shopIds) as DisputeListItem[];
 }

@@ -23,7 +23,8 @@ function dropStaleSchema(db: DB): void {
   const cols = db.prepare("PRAGMA table_info(shops)").all() as { name: string }[];
   if (cols.length === 0) return;
   const dcols = db.prepare("PRAGMA table_info(disputes)").all() as { name: string }[];
-  if (cols.some((c) => c.name === "workspace_id") && dcols.some((c) => c.name === "simulated")) return;
+  const scols = db.prepare("PRAGMA table_info(search_log)").all() as { name: string }[];
+  if (cols.some((c) => c.name === "workspace_id") && dcols.some((c) => c.name === "simulated") && scols.some((c) => c.name === "is_demo")) return;
   db.pragma("foreign_keys = OFF");
   for (const t of TABLES) db.exec(`DROP TABLE IF EXISTS ${t}`);
   db.pragma("foreign_keys = ON");

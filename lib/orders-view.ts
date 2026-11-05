@@ -34,7 +34,7 @@ export function listOrders(db: DB, shopIds: number[]): OrderListItem[] {
               (SELECT COUNT(*) FROM disputes d WHERE d.order_id = o.id) AS disputes
        FROM orders o JOIN quotes q ON q.id = o.quote_id JOIN shops s ON s.id = o.shop_id
        LEFT JOIN products p ON p.shop_id = o.shop_id AND p.sku = q.sku
-       WHERE o.shop_id IN (${marks}) ORDER BY o.rowid DESC`,
+       WHERE o.shop_id IN (${marks}) AND o.is_demo = 0 ORDER BY o.rowid DESC`,
     )
     .all(...shopIds) as (Omit<OrderListItem, "list_price_cents" | "negotiated"> & { transcript_json: string })[];
   return rows.map(({ transcript_json, ...r }) => {

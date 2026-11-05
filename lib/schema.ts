@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS search_log (
   query TEXT NOT NULL,
   results_count INTEGER NOT NULL,
   agent_id TEXT,
+  is_demo INTEGER NOT NULL DEFAULT 0, -- seeded demo history (see lib/demo-history.ts)
   ts TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS quotes (
@@ -65,7 +66,8 @@ CREATE TABLE IF NOT EXISTS orders (
   status TEXT NOT NULL,
   amount_cents INTEGER NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  captured_at TEXT
+  captured_at TEXT,
+  is_demo INTEGER NOT NULL DEFAULT 0 -- seeded demo history: no quote, no PayPal id, never in real flows
 );
 CREATE TABLE IF NOT EXISTS disputes (
   id TEXT PRIMARY KEY,
@@ -80,7 +82,8 @@ CREATE TABLE IF NOT EXISTS disputes (
   paypal_status TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   submitted_at TEXT,
-  submission_json TEXT
+  submission_json TEXT,
+  is_demo INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY,

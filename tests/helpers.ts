@@ -19,7 +19,7 @@ export const cookieFrom = (res: Response): string => (res.headers.get("set-cooki
 
 export function seededDb(): { db: DB; shop: Shop } {
   const db = openDb(":memory:");
-  seed(db);
+  seed(db, { demoHistory: false }); // most tests assume empty orders, disputes and search log
   const shop = getShop(db, DEMO_SHOP.slug);
   if (!shop) throw new Error("demo shop missing after seed");
   return { db, shop };

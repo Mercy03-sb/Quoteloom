@@ -16,7 +16,7 @@ describe("seed", () => {
   it("is idempotent and wipes runtime state", () => {
     const { db, shop } = seededDb();
     db.prepare("INSERT INTO search_log (shop_id, query, results_count) VALUES (?, 'x', 0)").run(shop.id);
-    seed(db);
+    seed(db, { demoHistory: false });
     expect(count(db, "shops")).toBe(1);
     expect(count(db, "products")).toBe(DEMO_PRODUCTS.length);
     expect(count(db, "search_log")).toBe(0);
