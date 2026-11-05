@@ -7,6 +7,8 @@ import { getDb } from "@/lib/db";
 import { sqliteToIso } from "@/lib/evidence";
 import { orderEvents, type OrderStatus } from "@/lib/orders";
 import { visibleOrder } from "@/lib/orders-view";
+import { MarketLine } from "@/components/market/MarketLine";
+import { marketFromTranscript } from "@/lib/market-view";
 import { inspectQuote } from "@/lib/quote";
 import { currentWorkspaceId } from "@/lib/workspace-server";
 
@@ -30,6 +32,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   }
   const info = inspectQuote(db, order.quote_id);
   const transcript = (info?.transcript ?? []) as Record<string, unknown>[];
+  const market = marketFromTranscript(transcript);
   const decision = transcript.find((e) => e.type === "decision");
   const message = transcript.find((e) => e.type === "message");
   const request = transcript.find((e) => e.type === "request");
@@ -88,6 +91,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             ) : (
               <p className="stat-note">No decision log is stored for this quote.</p>
             )}
+            {market && <div style={{ marginTop: "var(--sp-3)" }}><MarketLine m={market} samples /></div>}
             {info && <p className="stat-note" style={{ marginTop: "var(--sp-3)" }}><Link href={`/quote/${info.quote.id}`}>Open the signed quote</Link></p>}
           </Card>
 

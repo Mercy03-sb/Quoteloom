@@ -37,7 +37,7 @@ export async function POST(req: Request): Promise<Response> {
   const base = resolveBaseUrl(req.headers);
 
   if (b.action === "search") return reply(await callShopTool(db, found, "search_products", { query: b.query, limit: 6 }, base));
-  if (b.action === "quote") return reply(await callShopTool(db, found, "request_quote", { sku: b.sku, qty: b.qty, ...(b.offer_price === undefined ? {} : { offer_price: b.offer_price }) }, base));
+  if (b.action === "quote") return reply(await callShopTool(db, found, "request_quote", { sku: b.sku, qty: b.qty, ...(b.offer_price === undefined ? {} : { offer_price: b.offer_price }) }, base, ids));
   if (b.action === "checkout") return reply(await callShopTool(db, found, "create_checkout", { quote_id: b.quote_id }, base));
   return reply(await callShopTool(db, found, "get_order_status", { order_id: b.order_id }, base));
 }

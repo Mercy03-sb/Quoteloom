@@ -4,6 +4,8 @@ import { Badge, Card, EmptyState } from "@/components/ui";
 import { formatCents } from "@/lib/catalog";
 import { getDb } from "@/lib/db";
 import { weaveFor, weaveStyle } from "@/lib/design/weave";
+import { MarketLine } from "@/components/market/MarketLine";
+import { marketFromTranscript } from "@/lib/market-view";
 import { inspectQuote } from "@/lib/quote";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +24,7 @@ export default async function QuotePage({ params }: { params: Promise<{ quoteId:
     );
   }
   const { quote: q, verdict } = info;
+  const market = marketFromTranscript(info.transcript);
   const status = verdict.ok
     ? { tone: "success" as const, label: "Signature valid", note: "The stored terms match the HMAC signature and the quote has not expired." }
     : verdict.code === "expired"
@@ -78,6 +81,11 @@ export default async function QuotePage({ params }: { params: Promise<{ quoteId:
               <code className="sig">{q.signature}</code>
             </div>
           </Card>
+          {market && (
+            <Card title="Market reference" flat>
+              <MarketLine m={market} samples />
+            </Card>
+          )}
           <Card title="Decision log" flat>
             <ol className="steps" style={{ gap: "var(--sp-2)" }}>
               {info.transcript.map((t, i) => {
@@ -93,6 +101,8 @@ export default async function QuotePage({ params }: { params: Promise<{ quoteId:
                           ? `Round ${String(e.round)}; earlier offers: ${((e.prior as { offer_cents: number }[]) ?? []).map((p) => formatCents(p.offer_cents)).join(", ")}`
                           : e.type === "message"
                             ? `“${String(e.text)}” (${String(e.source)} wording)`
+                            : e.type === "market_reference"
+                              ? String(e.label) + (e.status === "ok" ? ": similar items, information only" : ": limited market data")
                             : String(e.note ?? "")}
                     </span>
                   </li>

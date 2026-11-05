@@ -7,6 +7,9 @@ import type { DB } from "./db";
 import { createCheckout, getOrderStatus, OrderError } from "./orders";
 import { PaypalError } from "./paypal";
 import { PolicyError } from "./policy";
+import type { LookupCtx } from "./channel3";
+import { publicMarket } from "./market";
+import { clientIp } from "./ratelimit";
 import { issueQuoteDrafted, QuoteError } from "./quote";
 
 const money = (cents: number) => (cents / 100).toFixed(2);
@@ -28,7 +31,7 @@ function fail(err: unknown): ToolResult {
 }
 
 /** Build an MCP server exposing one shop's tools. */
-export function buildShopServer(db: DB, shop: Shop, agentId: string | null, baseUrl = resolveBaseUrl()): McpServer {
+export function buildShopServer(db: DB, shop: Shop, agentId: string | null, baseUrl = resolveBaseUrl(), caller: LookupCtx = {}): McpServer {
   const server = new McpServer({ name: `quoteloom-${shop.slug}`, version: "0.1.0" });
 
   server.registerTool(
@@ -87,7 +90,7 @@ export function buildShopServer(db: DB, shop: Shop, agentId: string | null, base
           qty,
           offerCents: offer_price === undefined ? undefined : Math.round(offer_price * 100),
           agentId,
-        });
+        }, { market: caller });
         return ok({
           quote_id: q.id,
           sku: q.sku,
@@ -107,6 +110,7 @@ export function buildShopServer(db: DB, shop: Shop, agentId: string | null, base
           },
           list_price: money(q.list_price_cents),
           quantity_discounts: q.quantity_discounts,
+          market_reference: q.market ? publicMarket(q.market) : null,
           message: q.message,
         });
       } catch (err) {
@@ -174,8 +178,8 @@ export function agentIdFrom(req: Request): string | null {
  * Handle one Streamable HTTP request statelessly: a fresh server + transport per
  * request, JSON responses (no long-lived SSE), which suits a single free-tier service.
  */
-export async function handleMcpRequest(db: DB, shop: Shop, req: Request, baseUrl?: string): Promise<Response> {
-  const server = buildShopServer(db, shop, agentIdFrom(req), baseUrl ?? resolveBaseUrl(req.headers));
+export async function handleMcpRequest(db: DB, shop: Shop, req: Request, baseUrl?: string, caller?: LookupCtx): Promise<Response> {
+  const server = buildShopServer(db, shop, agentIdFrom(req), baseUrl ?? resolveBaseUrl(req.headers), caller ?? { ip: clientIp(req.headers) });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,

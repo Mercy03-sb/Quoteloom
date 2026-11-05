@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -16,14 +16,14 @@ const raw = {
   ],
 };
 const okFetch = (): FetchLike & { calls: number } => {
-  const f = (async () => new Response(JSON.stringify(raw), { status: 200 })) as FetchLike & { calls: number };
-  const spy = vi.fn(f);
-  const wrapped = ((u: string, i: RequestInit) => {
-    wrapped.calls += 1;
-    return spy(u, i);
-  }) as FetchLike & { calls: number };
-  wrapped.calls = 0;
-  return wrapped;
+  const f: FetchLike & { calls: number } = Object.assign(
+    async () => {
+      f.calls += 1;
+      return new Response(JSON.stringify(raw), { status: 200 });
+    },
+    { calls: 0 },
+  );
+  return f;
 };
 
 let snapFile: string;

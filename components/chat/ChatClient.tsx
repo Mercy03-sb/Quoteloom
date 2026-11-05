@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Badge, Button, useToast } from "@/components/ui";
 import { weaveFor, weaveStyle } from "@/lib/design/weave";
 import type { Intent, ToolOutcome } from "@/lib/chat";
+import { MarketLine } from "@/components/market/MarketLine";
 import { NegotiationResult, OfferPanel } from "./OfferPanel";
 
 type Product = { sku: string; title: string; description: string; price: string; currency: string; in_stock: boolean };
@@ -284,6 +285,7 @@ export function ChatClient({ shopSlug }: { shopSlug: string }) {
                       <span>Signature</span><code className="sig">{String(r.signature).slice(0, 22)}…</code>
                     </div>
                     <NegotiationResult r={r} />
+                    {r.market_reference ? <MarketLine m={r.market_reference as Parameters<typeof MarketLine>[0]["m"]} /> : null}
                     {String(r.quote_id) === newestQuoteId && (
                       <OfferPanel key={String(r.quote_id)} r={r} busy={busy} onSubmit={(qty, offer) => quote(String(r.sku), qty, offer)} />
                     )}

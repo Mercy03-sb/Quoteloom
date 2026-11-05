@@ -37,6 +37,7 @@ export async function callShopTool(
   tool: string,
   args: Record<string, unknown>,
   baseUrl: string,
+  caller?: { ip: string; workspace: string | null },
 ): Promise<ToolOutcome> {
   const req = new Request(`${baseUrl}/m/${shop.slug}/mcp`, {
     method: "POST",
@@ -48,7 +49,7 @@ export async function callShopTool(
     },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: tool, arguments: args } }),
   });
-  const body = (await (await handleMcpRequest(db, shop, req, baseUrl)).json()) as {
+  const body = (await (await handleMcpRequest(db, shop, req, baseUrl, caller)).json()) as {
     result?: { structuredContent?: Record<string, unknown>; isError?: boolean; content?: { text?: string }[] };
     error?: { message?: string };
   };

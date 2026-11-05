@@ -5,6 +5,8 @@ import type { Shop } from "./catalog";
 import type { DB } from "./db";
 import { draftMessage, templateMessage } from "./negotiate";
 import { checkQuantity, decideUnitPrice, parseRules, type Outcome, type PriceDecision, type QuantityBreak } from "./policy";
+import { marketReference, type MarketReference } from "./market";
+import type { LookupCtx } from "./channel3";
 import { QUOTE_TTL_MS, QuoteError, signQuote, signingSecret, type Quote, type QuoteFields } from "./quote";
 
 type ProductForQuote = { title: string; price_cents: number; currency: string; stock: number; attrs_json: string };
@@ -21,6 +23,7 @@ export type IssuedQuote = Quote & {
   list_price_cents: number;
   public_reasons: string[];
   quantity_discounts: QuantityBreak[];
+  market: MarketReference | null; // information only (Channel3); never used to set the price
 };
 
 /** How long an agent's earlier offers for a SKU count as the same negotiation. */
@@ -87,7 +90,7 @@ function prepare(db: DB, shop: Shop, input: IssueInput, now: Date): Prepared {
   return { product, decision, history, breaks: rules.quantity_breaks };
 }
 
-function persist(db: DB, shop: Shop, input: IssueInput, p: Prepared, message: Message, now: Date, secret: string): IssuedQuote {
+function persist(db: DB, shop: Shop, input: IssueInput, p: Prepared, message: Message, now: Date, secret: string, market: MarketReference | null = null): IssuedQuote {
   const { product, decision } = p;
   const fields: QuoteFields = {
     id: `q_${randomBytes(12).toString("hex")}`,
@@ -127,6 +130,7 @@ function persist(db: DB, shop: Shop, input: IssueInput, p: Prepared, message: Me
     public_reasons: decision.publicReasons,
     note: decision.note,
   });
+  if (market) transcript.push({ ts, ...market, type: "market_reference" });
   if (message) transcript.push({ ts, type: "message", source: message.source, text: message.text });
   db.prepare(
     `INSERT INTO quotes (id, shop_id, sku, qty, price_cents, currency, expires_at, signature, transcript_json)
@@ -146,6 +150,7 @@ function persist(db: DB, shop: Shop, input: IssueInput, p: Prepared, message: Me
     list_price_cents: decision.listPriceCents,
     public_reasons: decision.publicReasons,
     quantity_discounts: p.breaks,
+    market,
   };
 }
 
@@ -174,11 +179,14 @@ export async function issueQuoteDrafted(
   db: DB,
   shop: Shop,
   input: IssueInput,
-  opts: IssueOpts & { env?: Record<string, string | undefined>; fetchImpl?: typeof fetch } = {},
+  opts: IssueOpts & { env?: Record<string, string | undefined>; fetchImpl?: typeof fetch; market?: LookupCtx } = {},
 ): Promise<IssuedQuote> {
   const now = opts.now ?? new Date();
   const p = prepare(db, shop, input, now);
   const message: Message =
     input.offerCents === undefined ? null : await draftMessage(db, factsOf(p, input, shop), { env: opts.env, fetchImpl: opts.fetchImpl });
-  return persist(db, shop, input, p, message, now, opts.secret ?? signingSecret());
+  // Market reference runs only when the buyer made an offer. Its failure never blocks a quote.
+  const market =
+    input.offerCents === undefined ? null : await marketReference(db, p.product.title, p.product.currency, opts.market).catch(() => null);
+  return persist(db, shop, input, p, message, now, opts.secret ?? signingSecret(), market);
 }
