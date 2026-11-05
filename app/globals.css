@@ -340,3 +340,8 @@ a { color: var(--c-accent); }
 .suggest-list { list-style: none; margin: 0; padding: 4px 0; display: grid; gap: 8px; }
 .suggest-list li { display: flex; gap: 8px; align-items: center; line-height: 1.3; white-space: normal; }
 .market-line { display: grid; gap: 2px; }
+
+/* About */
+.built-with { display: grid; gap: var(--sp-4); margin: 0; }
+.built-with dt { font-weight: 700; }
+.built-with dd { margin: 2px 0 0; color: var(--c-text-muted); max-width: 70ch; }

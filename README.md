@@ -18,6 +18,7 @@ Open http://localhost:3000. No environment variables are needed: the app starts 
 | --- | --- |
 | `npm run dev` | Start locally (sim mode by default) |
 | `npm run seed` | Reset the SQLite DB to the demo state |
+| `npm run snapshot:channel3` | Rebuild `data/channel3-snapshot.json` from live Channel3 calls (needs `CHANNEL3_API_KEY` in `.env.local`; max 60 calls) |
 | `npm run check:gemini` | One tiny Gemini call with the configured key and model; prints the real error if it fails (`-- --models` lists valid model names) |
 | `npm test` | Unit tests (Vitest) |
 | `npm run build` | Production build |
@@ -117,6 +118,26 @@ Each PayPal webhook logs one line, `[webhook] type=... signature=ok|failed dupli
 ## Deploy on Render
 
 `render.yaml` is a blueprint for one free Node web service (build `npm ci && npm run build`, start `npm run start`, `NODE_VERSION` 22.9.0, DB in `/tmp`). Create a Blueprint from the repo; PayPal and Gemini keys are optional and set in the dashboard. The free tier sleeps when idle, so open the URL once before using it as a connector.
+
+## Built with
+
+Plainly, what each tool does here:
+
+- **PayPal** (sandbox only). Orders v2: an order is created from a signed quote and captured after the buyer approves it. Webhooks (signature verified): `CHECKOUT.ORDER.APPROVED` triggers capture and `PAYMENT.CAPTURE.COMPLETED` marks the order paid. Disputes arrive as webhook events and each one gets an evidence packet built from the signed quote and the order record. The demo mostly uses simulated disputes; the real dispute and provide-evidence calls have not been tested against PayPal.
+- **AG Grid Community**. The tables: catalog, shop setup review, orders, disputes and analytics. Themed from the app's colour tokens, light and dark.
+- **Channel3**. Context only: a market price range of similar items during negotiation, and "consider stocking" suggestions for searches that found nothing. Order of use: SQLite cache, one live call (about 4 s timeout, no retries, rate limited per IP, per workspace and globally), the committed snapshot `data/channel3-snapshot.json`, then nothing. Every result is marked live, cached or snapshot. It never sets a price. Offer links are never shown inside buyer-facing negotiation. Set `CHANNEL3_API_KEY` to enable live calls; rebuild the snapshot with `npm run snapshot:channel3` (at most 60 calls).
+- **APIMatic Context Plugin**. Used while writing `lib/paypal.ts` to get the PayPal Server SDK calls right. A development tool, not part of the running app.
+- **Render**. Hosts the single Node service on the free tier (`render.yaml`). SQLite is re-seeded on every start.
+- **Gemini** (free tier, plain fetch, only via `lib/llm.ts`). Normalises messy HTML when a shop page has no structured data and can word replies to buyer offers. It never decides a price. Without a key, rule-based code does both jobs.
+- **Claude Code**. Wrote most of the code, tests and docs under human direction. Claude is not called by the running app.
+
+## Analytics and demo data
+
+`/analytics` has four sections (sales, agent traffic, unmet demand, disputes). The demo shop gets a fake 30-day history on every boot (`lib/demo-history.ts`): rows carry `is_demo = 1`, are labelled "Demo" in the UI, have no quote and no PayPal id, and are filtered out of the real orders, disputes and receipt flows. Use of the history is idempotent: it is deleted and re-created each time. Unmet demand groups searches with zero or one result and fetches similar items from Channel3 for each group.
+
+## Agent playground
+
+`/playground` (old route `/chat` still works) is a built-in test agent. Any MCP-capable agent can use a shop through its MCP URL. Import `docs/postman/quoteloom.postman_collection.json` into Postman (no account needed) to try the HTTP API and MCP calls by hand.
 
 ## Layout
 
