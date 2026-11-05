@@ -110,3 +110,19 @@ describe("studio licence guard and error boundary", () => {
     expect(errors.mock.calls.some((c: unknown[]) => String(c[0]).includes("[studio] AG Studio crashed"))).toBe(true);
   });
 });
+
+describe("Studio unavailable paths through the real lazy chunk", () => {
+  it("shows the Community view with an 'invalid key' notice when the key is not accepted", async () => {
+    vi.stubEnv("NEXT_PUBLIC_AG_GRID_LICENSE_KEY", "not-a-real-licence-key");
+    mediaQuery(false);
+    // fetch is used by Studio's data source and the AI availability check; neither should be needed for an invalid key
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ available: false, rows: [] })));
+    const { findByTestId } = render(<StudioGate shop="demo" fallback={<p>community view</p>} />);
+    const box = await findByTestId("studio-fallback", undefined, { timeout: 8000 });
+    expect(box.getAttribute("data-reason")).toBe("invalid");
+    expect(box.textContent).toContain("licence key was not accepted");
+    expect(box.textContent).toContain("community view");
+    vi.unstubAllGlobals();
+    noConsoleNoise();
+  }, 15000);
+});
