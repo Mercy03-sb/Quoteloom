@@ -97,7 +97,7 @@ export function loadSnapshot(file = snapshotPath()): C3Snapshot | null {
   if (snapshotMemo?.file === file) return snapshotMemo.snap;
   let snap: C3Snapshot | null = null;
   try {
-    const j = JSON.parse(fs.readFileSync(file, "utf8")) as C3Snapshot;
+    const j = JSON.parse(fs.readFileSync(/* turbopackIgnore: true */ file, "utf8")) as C3Snapshot;
     if (j && typeof j.entries === "object") snap = j;
   } catch {
     snap = null; // missing or unreadable: no snapshot, not an error
