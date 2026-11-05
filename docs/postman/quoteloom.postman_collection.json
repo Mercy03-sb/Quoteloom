@@ -700,6 +700,87 @@
               ]
             }
           }
+        },
+        {
+          "name": "Studio: dataset rows",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/studio/data?table=orders&shop={{shop}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "studio",
+                "data"
+              ],
+              "query": [
+                {
+                  "key": "table",
+                  "value": "orders"
+                },
+                {
+                  "key": "shop",
+                  "value": "{{shop}}"
+                }
+              ]
+            },
+            "description": "Rows for the AG Studio dashboard. table is orders, searches, unmet_demand or disputes. Scoped to the caller's workspace cookie (no cookie: the demo shop only); an unknown or private shop is a 404. Demo rows carry data_origin = Demo. No floor or cost in any dataset. Rate limited."
+          }
+        },
+        {
+          "name": "Studio: assistant available?",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/studio/ai",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "studio",
+                "ai"
+              ]
+            },
+            "description": "Returns {\"available\": true|false}: whether the Gemini model is configured on the server. Never returns any credential."
+          }
+        },
+        {
+          "name": "Studio: assistant turn",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/studio/ai",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "studio",
+                "ai"
+              ]
+            },
+            "description": "The endpoint behind the AG Studio chat (the shape of AG Studio's AgLlmRequest). Answers with an AgLlmResponse: output items that are assistant messages or function_call items. Failures answer {error:{code,message}} with 503 (model off, busy or overloaded), 504 (timeout), 413 (too large) or 429 (rate limited, per workspace and per IP). Body capped at 200 KB; output capped at 4096 tokens.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": [\n    {\n      \"id\": \"m1\",\n      \"kind\": \"input\",\n      \"type\": \"message\",\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": \"Chart sales per day.\"\n        }\n      ],\n      \"status\": \"completed\"\n    }\n  ],\n  \"instructions\": \"You build dashboards.\",\n  \"tools\": [\n    {\n      \"name\": \"add_widget\",\n      \"description\": \"Add a widget to the page\",\n      \"parameters\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"type\": {\n            \"type\": \"string\"\n          }\n        }\n      }\n    }\n  ],\n  \"toolChoice\": \"auto\",\n  \"responseFormat\": {\n    \"type\": \"text\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
         }
       ]
     }

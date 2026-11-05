@@ -13,6 +13,6 @@ describe("About page and README", () => {
       expect(html).toContain(t.name);
       expect(readme).toContain(t.name);
     }
-    expect(BUILT_WITH.map((t) => t.name)).toEqual(["PayPal", "AG Grid Community", "Channel3", "APIMatic Context Plugin", "Render", "Gemini", "Claude Code"]);
+    expect(BUILT_WITH.map((t) => t.name)).toEqual(["PayPal", "AG Grid Community", "AG Studio", "Channel3", "APIMatic Context Plugin", "Render", "Gemini", "Claude Code"]);
   });
 });

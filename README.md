@@ -124,12 +124,17 @@ Each PayPal webhook logs one line, `[webhook] type=... signature=ok|failed dupli
 Plainly, what each tool does here:
 
 - **PayPal** (sandbox only). Orders v2: an order is created from a signed quote and captured after the buyer approves it. Webhooks (signature verified): `CHECKOUT.ORDER.APPROVED` triggers capture and `PAYMENT.CAPTURE.COMPLETED` marks the order paid. Disputes arrive as webhook events and each one gets an evidence packet built from the signed quote and the order record. The demo mostly uses simulated disputes; the real dispute and provide-evidence calls have not been tested against PayPal.
-- **AG Grid Community**. The tables: catalog, shop setup review, orders, disputes and analytics. Themed from the app's colour tokens, light and dark.
+- **AG Grid Community**. The tables: catalog, shop setup review, orders, disputes and analytics. Themed from the app's colour tokens, light and dark. Outside `/studio` there are no enterprise features.
+- **AG Studio**. The `/studio` page: an editable dashboard of the shop's own data (orders, searches, unmet demand with Channel3 suggestions, disputes; seeded demo rows are labelled "Demo"; no floor or cost in any dataset), with a default report already on the page. Its chat panel builds dashboards from plain language through the AG Studio Agent Framework, with Gemini as the model behind our own route `/api/studio/ai` (rate limited, size and token capped; the key stays on the server). The assistant can only use Studio's own tools on the open report. It runs on a **45-day trial licence that expires on 20 December 2026**, supplied as `NEXT_PUBLIC_AG_GRID_LICENSE_KEY` (read at build time, never committed). Without a key, with an invalid or expired key, when Studio fails to load, or on a phone-width screen, `/studio` shows the same analytics with AG Grid Community and a short notice. Without Gemini, the chat says so and its prompt starters still load prebuilt reports. Notes: `docs/ag-studio-notes.md`.
 - **Channel3**. Context only: a market price range of similar items during negotiation, and "consider stocking" suggestions for searches that found nothing. Order of use: SQLite cache, one live call (about 4 s timeout, no retries, rate limited per IP, per workspace and globally), the committed snapshot `data/channel3-snapshot.json`, then nothing. Every result is marked live, cached or snapshot. It never sets a price. Offer links are never shown inside buyer-facing negotiation. Set `CHANNEL3_API_KEY` to enable live calls; rebuild the snapshot with `npm run snapshot:channel3` (at most 60 calls).
 - **APIMatic Context Plugin**. Used while writing `lib/paypal.ts` to get the PayPal Server SDK calls right. A development tool, not part of the running app.
 - **Render**. Hosts the single Node service on the free tier (`render.yaml`). SQLite is re-seeded on every start.
-- **Gemini** (free tier, plain fetch, only via `lib/llm.ts`). Normalises messy HTML when a shop page has no structured data and can word replies to buyer offers. It never decides a price. Without a key, rule-based code does both jobs.
+- **Gemini** (free tier, plain fetch, only via `lib/llm.ts`). Normalises messy HTML when a shop page has no structured data and can word replies to buyer offers, and is the model behind the AG Studio chat (tool-calling turns, `generateTurn` in `lib/llm.ts`). It never decides a price. Without a key, rule-based code does both jobs, and the Studio chat says it is off.
 - **Claude Code**. Wrote most of the code, tests and docs under human direction. Claude is not called by the running app.
+
+## Studio (AG Studio)
+
+`/studio` (nav item "Studio"). Data comes from `GET /api/studio/data?table=orders|searches|unmet_demand|disputes`, scoped to the caller's workspace and a shop that workspace may see. The assistant endpoint is `POST /api/studio/ai`; `GET` on it says only whether Gemini is configured. Both are in the Postman collection. Set `NEXT_PUBLIC_AG_GRID_LICENSE_KEY` before `npm run build` (it is inlined at build time) to turn Studio on; without it the page works with AG Grid Community only.
 
 ## Analytics and demo data
 
@@ -155,7 +160,8 @@ Plainly, what each tool does here:
 - `lib/dashboard.ts`, `lib/shop-view.ts` dashboard numbers and shop/catalog loading (per workspace)
 - `lib/workspace.ts`, `lib/workspace-server.ts`, `lib/shops.ts` anonymous workspaces, shop creation, visibility rules
 - `lib/ingest/` SSRF-safe fetch, JSON-LD / Open Graph extractor, rule-based parser, CSV parser, Gemini normaliser, pipeline, draft validation
-- `lib/llm.ts` Gemini over plain fetch with an input-hash cache; `lib/ratelimit.ts` limiter; `lib/conversations.ts` chat persistence
+- `lib/studio-data.ts`, `lib/studio-report.ts`, `lib/studio-ai.ts`, `components/studio/` the `/studio` page: datasets, default and prebuilt reports, Gemini request translation, the Studio view, adapter, licence guard and fallback gate
+- `lib/llm.ts` Gemini over plain fetch with an input-hash cache (and tool-calling turns for Studio); `lib/ratelimit.ts` limiter; `lib/conversations.ts` chat persistence
 - `lib/demo-shops.ts` the fake stores behind `/demo-shops`
 - `components/setup/` Setup screen and the editable review grid
 - `components/ui/` Card, Button, Badge, Table, EmptyState, Skeleton, Toast

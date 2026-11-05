@@ -13,7 +13,16 @@ export const BUILT_WITH: BuiltWith[] = [
   },
   {
     name: "AG Grid Community",
-    how: "The tables: catalog, shop setup review, orders, disputes and the analytics page. Themed from the app's own colour tokens, light and dark. No enterprise features.",
+    how: "The tables: catalog, shop setup review, orders, disputes and the analytics page. Themed from the app's own colour tokens, light and dark. Outside /studio there are no enterprise features.",
+  },
+  {
+    name: "AG Studio",
+    how:
+      "The /studio page: an editable dashboard of the shop's own data (orders, searches, unmet demand, disputes; demo rows are labelled Demo) with a default report already on the page. " +
+      "Its chat panel builds dashboards from plain language through the AG Studio Agent Framework, with Gemini as the model behind our own server route, so the key never reaches the browser. " +
+      "The assistant can only use Studio's own tools on the open report, and prices and rules are never in the data. " +
+      "It runs on a 45-day trial licence that expires on 20 December 2026. Without a working licence, or if Studio fails to load or the screen is small, /studio shows the same analytics with AG Grid Community. " +
+      "Without Gemini, the chat says so and its prompt starters still load prebuilt reports.",
   },
   {
     name: "Channel3",
@@ -32,7 +41,7 @@ export const BUILT_WITH: BuiltWith[] = [
   {
     name: "Gemini",
     how:
-      "Free tier, plain fetch, only through lib/llm.ts. It normalises messy HTML when a shop page has no structured data, and can word replies to buyer offers. " +
+      "Free tier, plain fetch, only through lib/llm.ts. It normalises messy HTML when a shop page has no structured data, can word replies to buyer offers, and is the model behind the AG Studio chat. " +
       "It never decides a price: the price is fixed by code first. Without a key, rule-based code does both jobs.",
   },
   {
