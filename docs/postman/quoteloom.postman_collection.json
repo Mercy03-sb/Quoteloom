@@ -1,0 +1,707 @@
+{
+  "info": {
+    "name": "Quoteloom",
+    "description": "HTTP API and MCP calls for Quoteloom. Sandbox and fake data only. Import this file into Postman (no account needed). Set the baseUrl variable (local: http://localhost:3000, hosted: https://quoteloom.onrender.com). Run the MCP folder top to bottom: quote_id and order_id are saved as collection variables.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "shop",
+      "value": "loom-and-thread"
+    },
+    {
+      "key": "quote_id",
+      "value": ""
+    },
+    {
+      "key": "order_id",
+      "value": ""
+    },
+    {
+      "key": "dispute_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "MCP (/m/{shop}/mcp)",
+      "item": [
+        {
+          "name": "tools/list",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "2025-06-18"
+              },
+              {
+                "key": "x-agent-id",
+                "value": "postman"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/m/{{shop}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "m",
+                "{{shop}}",
+                "mcp"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"tools/list\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Lists the shop's tools. Stateless: no initialize or session needed."
+          }
+        },
+        {
+          "name": "search_products",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "2025-06-18"
+              },
+              {
+                "key": "x-agent-id",
+                "value": "postman"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/m/{{shop}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "m",
+                "{{shop}}",
+                "mcp"
+              ]
+            },
+            "description": "Search the catalog. Logged to the shop's search log with the x-agent-id header.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"search_products\",\n    \"arguments\": {\n      \"query\": \"wool scarf\",\n      \"limit\": 5\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "get_product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "2025-06-18"
+              },
+              {
+                "key": "x-agent-id",
+                "value": "postman"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/m/{{shop}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "m",
+                "{{shop}}",
+                "mcp"
+              ]
+            },
+            "description": "One product by SKU.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"get_product\",\n    \"arguments\": {\n      \"sku\": \"LT-SCARF-WOOL-GRY\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "request_quote (list price)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json();",
+                  "const s = r.result && r.result.structuredContent;",
+                  "if (s && s.quote_id) pm.collectionVariables.set(\"quote_id\", s.quote_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "2025-06-18"
+              },
+              {
+                "key": "x-agent-id",
+                "value": "postman"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/m/{{shop}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "m",
+                "{{shop}}",
+                "mcp"
+              ]
+            },
+            "description": "Signed quote at the shop's price. Saves quote_id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"request_quote\",\n    \"arguments\": {\n      \"sku\": \"LT-SCARF-WOOL-GRY\",\n      \"qty\": 1\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "request_quote (make an offer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json();",
+                  "const s = r.result && r.result.structuredContent;",
+                  "if (s && s.quote_id) pm.collectionVariables.set(\"quote_id\", s.quote_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "2025-06-18"
+              },
+              {
+                "key": "x-agent-id",
+                "value": "postman"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/m/{{shop}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "m",
+                "{{shop}}",
+                "mcp"
+              ]
+            },
+            "description": "Negotiate. The shop's rules decide; the result includes an information-only market_reference (via Channel3, or snapshot). Saves quote_id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"request_quote\",\n    \"arguments\": {\n      \"sku\": \"LT-SCARF-WOOL-GRY\",\n      \"qty\": 1,\n      \"offer_price\": 38\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "create_checkout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json();",
+                  "const s = r.result && r.result.structuredContent;",
+                  "if (s && s.order_id) pm.collectionVariables.set(\"order_id\", s.order_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "2025-06-18"
+              },
+              {
+                "key": "x-agent-id",
+                "value": "postman"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/m/{{shop}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "m",
+                "{{shop}}",
+                "mcp"
+              ]
+            },
+            "description": "PayPal sandbox order from the quote. Open approval_url to pay. Saves order_id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"create_checkout\",\n    \"arguments\": {\n      \"quote_id\": \"{{quote_id}}\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "get_order_status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json, text/event-stream"
+              },
+              {
+                "key": "mcp-protocol-version",
+                "value": "2025-06-18"
+              },
+              {
+                "key": "x-agent-id",
+                "value": "postman"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/m/{{shop}}/mcp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "m",
+                "{{shop}}",
+                "mcp"
+              ]
+            },
+            "description": "CREATED, APPROVED, PAID, FAILED or REFUNDED.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"get_order_status\",\n    \"arguments\": {\n      \"order_id\": \"{{order_id}}\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "HTTP API",
+      "item": [
+        {
+          "name": "Chat: search",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"search\",\n  \"shop\": \"{{shop}}\",\n  \"query\": \"linen\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/chat",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            },
+            "description": "The playground's backend. Each action is one MCP tool call."
+          }
+        },
+        {
+          "name": "Chat: quote with offer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"quote\",\n  \"shop\": \"{{shop}}\",\n  \"sku\": \"LT-SCARF-WOOL-GRY\",\n  \"qty\": 1,\n  \"offer_price\": 38\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/chat",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            },
+            "description": "Rate limited per workspace and IP."
+          }
+        },
+        {
+          "name": "Chat: checkout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"checkout\",\n  \"shop\": \"{{shop}}\",\n  \"quote_id\": \"{{quote_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/chat",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Chat: status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"status\",\n  \"shop\": \"{{shop}}\",\n  \"order_id\": \"{{order_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/chat",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Ingest from URL",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"{{baseUrl}}/demo-shops/clay-and-kiln\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ingest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ingest"
+              ]
+            },
+            "description": "Reads a shop page (JSON-LD, Open Graph, then fallbacks) and returns a draft catalog. SSRF-safe."
+          }
+        },
+        {
+          "name": "Publish shop",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My test shop\",\n  \"source_url\": null,\n  \"products\": [\n    {\n      \"sku\": \"SKU-1\",\n      \"title\": \"Test product\",\n      \"price\": 12.5,\n      \"stock\": 5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/shops",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shops"
+              ]
+            },
+            "description": "Publishes a draft into the caller's anonymous workspace (cookie)."
+          }
+        },
+        {
+          "name": "Update shop rules",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"min_margin_pct\": 20,\n  \"max_discount_pct\": 15,\n  \"negotiation\": true,\n  \"max_qty\": 20,\n  \"quantity_breaks\": [\n    {\n      \"min_qty\": 5,\n      \"discount_pct\": 5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/shops/{{shop}}/rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "shops",
+                "{{shop}}",
+                "rules"
+              ]
+            },
+            "description": "Only for a shop in your own workspace."
+          }
+        },
+        {
+          "name": "Capture order (sim or sandbox)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/{{order_id}}/capture",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                "{{order_id}}",
+                "capture"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Simulate dispute",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"{{order_id}}\",\n  \"reason\": \"MERCHANDISE_OR_SERVICE_NOT_RECEIVED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/disputes/simulate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "disputes",
+                "simulate"
+              ]
+            },
+            "description": "Creates a simulated dispute with an evidence packet for a paid order."
+          }
+        },
+        {
+          "name": "Submit dispute evidence",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/disputes/{{dispute_id}}/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "disputes",
+                "{{dispute_id}}",
+                "submit"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Conversation: load",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/conversation?shop={{shop}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "conversation?shop={{shop}}"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
