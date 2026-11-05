@@ -1,5 +1,5 @@
 // Prebuilt AG Studio report states: the default dashboard, and one report per prompt starter.
-// The starters work without a model: when Gemini is unavailable they apply these states directly.
+// The starters never call a model: the chat adapter applies these states directly, so they work with zero quota.
 import type { AgReportState } from "ag-studio";
 
 type Page = NonNullable<AgReportState["pages"]>[number];
@@ -46,30 +46,30 @@ export const DEFAULT_REPORT: AgReportState = report(
 
 export type PromptStarter = { label: string; prompt: string; reply: string; state: AgReportState };
 
-/** Starter prompts. `reply` and `state` are used only when the model is unavailable. */
+/** Starter prompts. They load `state` locally and show `reply`: the model is never called for them, so they work with zero quota. */
 export const PROMPT_STARTERS: PromptStarter[] = [
   {
     label: "Chart sales per day",
     prompt: "Chart sales per day.",
-    reply: "Showing a prebuilt report instead: sales per day (demo orders are included and labelled in the data).",
+    reply: "Prebuilt report: sales per day (demo orders are included and labelled in the data).",
     state: report(page("sales", { sales: { w: widgets.sales, l: at(0, 0, 24, 18) } })),
   },
   {
     label: "Which agent searches most?",
     prompt: "Which agent searches most? Show it as a chart.",
-    reply: "Showing a prebuilt report instead: searches per agent, highest first by eye.",
+    reply: "Prebuilt report: searches per agent, highest first by eye.",
     state: report(page("agents", { agents: { w: widgets.agents, l: at(0, 0, 24, 18) } })),
   },
   {
     label: "Show unmet demand",
     prompt: "Show unmet demand.",
-    reply: "Showing a prebuilt report instead: searches that found nothing, with similar items from other retailers where available.",
+    reply: "Prebuilt report: searches that found nothing, with similar items from other retailers where available.",
     state: report(page("unmet", { unmet: { w: widgets.unmet, l: at(0, 0, 24, 18) } })),
   },
   {
     label: "Dispute status",
     prompt: "Show disputes by status.",
-    reply: "Showing a prebuilt report instead: disputes by status.",
+    reply: "Prebuilt report: disputes by status.",
     state: report(page("disputes", { disputes: { w: widgets.disputes, l: at(0, 0, 24, 18) } })),
   },
 ];

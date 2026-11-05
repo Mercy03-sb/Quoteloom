@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { GET, POST } from "@/app/api/studio/ai/route";
-import { createStudioAdapter } from "@/components/studio/adapter";
+import { clearStudioCache, createStudioAdapter } from "@/components/studio/adapter";
 import { resetBudget } from "@/lib/budget";
 import { resetLlmCooldown } from "@/lib/llm";
 import { resetPrompts } from "@/lib/studio-prompts";
@@ -209,29 +209,89 @@ describe("browser adapter", () => {
 
   it("says plainly that the model is unavailable, and does not touch the report for a free-text prompt", async () => {
     const setState = vi.fn();
-    const fetchImpl = vi.fn(async () => Response.json({ error: { code: "ai_off", message: "The AI assistant is off: this server has no Gemini API key." } }, { status: 503 })) as unknown as typeof fetch;
+    const fetchImpl = vi.fn(async () => Response.json({ error: { code: "ai_off", message: "The AI assistant is off here (no Gemini key is set up). Use the prompt starters." } }, { status: 503 })) as unknown as typeof fetch;
     const h = createStudioAdapter({ getApi: () => ({ getState: () => ({ pages: [], selectedPageId: "x" }), setState }) as never, fetchImpl }).executeTurn(request("make me a funnel"));
     const r = await h.complete;
     const text = JSON.stringify(r.output);
     expect(r.status).toBe("completed");
     expect(text).toContain("The AI assistant is off");
-    expect(text).toContain("prompt starters still load prebuilt reports");
+    expect(text).toContain("Use the prompt starters");
     expect(setState).not.toHaveBeenCalled();
   });
 
-  it("loads the prebuilt report for a prompt starter when the model is down", async () => {
-    const setState = vi.fn();
-    const fetchImpl = vi.fn(async () => {
-      throw new TypeError("network down");
-    }) as unknown as typeof fetch;
-    const starter = PROMPT_STARTERS[0];
-    const api = { getState: () => ({ pages: [], selectedPageId: "old", panels: { filters: { collapsed: true } } }), setState };
-    const r = await createStudioAdapter({ getApi: () => api as never, fetchImpl }).executeTurn(request(starter.prompt)).complete;
-    expect(setState).toHaveBeenCalledTimes(1);
-    const next = setState.mock.calls[0][0];
-    expect(next.selectedPageId).toBe(starter.state.selectedPageId);
-    expect(next.panels).toEqual({ filters: { collapsed: true } }); // the rest of the state is kept
-    expect(JSON.stringify(r.output)).toContain("Showing a prebuilt report instead");
+  it("loads every prompt starter's prebuilt report locally: no network call at all, even with the model up", async () => {
+    for (const starter of PROMPT_STARTERS) {
+      const setState = vi.fn();
+      const fetchImpl = vi.fn();
+      const api = { getState: () => ({ pages: [], selectedPageId: "old", panels: { filters: { collapsed: true } } }), setState };
+      const r = await createStudioAdapter({ getApi: () => api as never, fetchImpl: fetchImpl as never }).executeTurn(request(starter.prompt)).complete;
+      expect(fetchImpl).not.toHaveBeenCalled();
+      expect(setState).toHaveBeenCalledTimes(1);
+      const next = setState.mock.calls[0][0];
+      expect(next.selectedPageId).toBe(starter.state.selectedPageId);
+      expect(next.panels).toEqual({ filters: { collapsed: true } }); // the rest of the state is kept
+      expect(JSON.stringify(r.output)).toContain("Prebuilt report");
+    }
+  });
+
+  it("caches a free-text answer by prompt and dashboard state, and labels the replay (cached)", async () => {
+    clearStudioCache();
+    let state: unknown = { pages: [{ id: "a" }], selectedPageId: "a", panels: { filters: { collapsed: true } } };
+    const api = { getState: () => state, setState: vi.fn() };
+    const answer = (text: string) => ({ id: "r", createdAt: 1, status: "completed", output: [{ id: "m", kind: "output", type: "message", role: "assistant", status: "completed", content: [{ type: "text", text, annotations: [] }] }] });
+    const fetchImpl = vi.fn(async () => Response.json(answer("Orders are mostly paid."))) as unknown as typeof fetch;
+    const adapter = createStudioAdapter({ getApi: () => api as never, fetchImpl });
+    const text = async (q: string) => JSON.stringify((await adapter.executeTurn(request(q)).complete).output);
+
+    expect(await text("How are orders doing?")).not.toContain("(cached)");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(await text("How are orders doing?")).toContain("Orders are mostly paid. (cached)");
+    expect(fetchImpl).toHaveBeenCalledTimes(1); // second time: no call
+    state = { pages: [{ id: "a" }], selectedPageId: "a", panels: { filters: { collapsed: false } } }; // panel layout is not part of the key
+    expect(await text("How are orders doing?")).toContain("(cached)");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    state = { pages: [{ id: "b" }], selectedPageId: "b" }; // different dashboard: a fresh answer
+    expect(await text("How are orders doing?")).not.toContain("(cached)");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(await text("A different question")).not.toContain("(cached)");
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it("replays a multi-turn answer (tool calls, then text) from the cache and never caches a failure", async () => {
+    clearStudioCache();
+    const api = { getState: () => ({ pages: [], selectedPageId: "x" }), setState: vi.fn() };
+    const msg = (text: string) => ({ id: "m", kind: "output", type: "message", role: "assistant", status: "completed", content: [{ type: "text", text, annotations: [] }] });
+    const call = { id: "f", kind: "output", type: "function_call", callId: "c1", name: "add_widget", arguments: "{}", status: "completed" };
+    const replies = [{ id: "r1", createdAt: 1, status: "completed", output: [call] }, { id: "r2", createdAt: 1, status: "completed", output: [msg("Added.")] }];
+    const fetchImpl = vi.fn(async () => Response.json(replies.shift())) as unknown as typeof fetch;
+    const adapter = createStudioAdapter({ getApi: () => api as never, fetchImpl });
+    const followUp = { input: [userMsg("Add a chart"), call, { type: "function_call_output", callId: "c1", output: "{}", status: "completed" }] } as never;
+    await adapter.executeTurn(request("Add a chart")).complete;
+    await adapter.executeTurn(followUp).complete;
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const again1 = await adapter.executeTurn(request("Add a chart")).complete;
+    const again2 = await adapter.executeTurn(followUp).complete;
+    expect(fetchImpl).toHaveBeenCalledTimes(2); // both turns replayed
+    expect(JSON.stringify(again1.output)).toContain("add_widget");
+    expect(JSON.stringify(again2.output)).toContain("Added. (cached)");
+
+    clearStudioCache();
+    const down = vi.fn(async () => Response.json({ error: { code: "ai_busy", message: "The AI model is busy." } }, { status: 503 })) as unknown as typeof fetch;
+    const flaky = createStudioAdapter({ getApi: () => api as never, fetchImpl: down });
+    await flaky.executeTurn(request("Hello there")).complete;
+    await flaky.executeTurn(request("Hello there")).complete;
+    expect(down).toHaveBeenCalledTimes(2); // an error answer is not cached
+  });
+
+  it("shows only our own wording to the reader: never a raw Google error, a stack trace or a key", async () => {
+    clearStudioCache();
+    const raw = `{"error":{"code":429,"message":"Quota exceeded for metric ... ${KEY}","status":"RESOURCE_EXHAUSTED"}} at Object.<anonymous> (stack.js:1:1)`;
+    const fetchImpl = vi.fn(async () => new Response(raw, { status: 502 })) as unknown as typeof fetch;
+    const r = await createStudioAdapter({ getApi: () => undefined, fetchImpl }).executeTurn(request("free text one")).complete;
+    const text = JSON.stringify(r.output);
+    expect(text).toContain("The AI assistant is unavailable right now. Use the prompt starters.");
+    expect(text).not.toMatch(/RESOURCE_EXHAUSTED|Quota exceeded|stack\.js|Object\.<anonymous>/);
+    expect(text).not.toContain(KEY);
   });
 
   it("reports an aborted turn as cancelled", async () => {
@@ -283,5 +343,45 @@ describe("one prompt takes at most 3 model turns", () => {
     await post(turn(0));
     const line = String((console.info as unknown as { mock: { calls: unknown[][] } }).mock.calls[0][0]);
     expect(line).toMatch(/turn=1\/3 http_calls=2 /);
+  });
+});
+
+describe("messages for the chat panel", () => {
+  const send = async () => {
+    const res = await post(baseReq());
+    return { status: res.status, text: await res.text() };
+  };
+  const logs = () => (console.warn as unknown as { mock: { calls: unknown[][] } }).mock.calls.flat().join("\n");
+
+  it("busy: every model is rate limited per minute -> plain 'busy' message, real error only in the server log", async () => {
+    fetchMock.mockImplementation(async () => geminiErr(429, "RESOURCE_EXHAUSTED", `Quota exceeded for metric RequestsPerMinute, key ${KEY}`));
+    const { status, text } = await send();
+    expect(status).toBe(503);
+    expect(JSON.parse(text).error).toMatchObject({ code: "ai_busy", message: expect.stringMatching(/busy.*backup models.*minute/i) });
+    expect(text).not.toMatch(/RESOURCE_EXHAUSTED|Quota exceeded|gemini-3/);
+    expect(text).not.toContain(KEY);
+    expect(logs()).toMatch(/Gemini 429.*RESOURCE_EXHAUSTED.*\(model=gemini-3\.5-flash-lite\)/); // model and status are logged...
+    expect(logs()).not.toContain(KEY); // ...the key never is
+  });
+
+  it("daily budget used: a daily 429 on every model -> the resting message", async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ error: { code: 429, status: "RESOURCE_EXHAUSTED", message: "Quota exceeded", details: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] } }), { status: 429 }));
+    const { text } = await send();
+    expect(JSON.parse(text).error).toMatchObject({ code: "ai_resting", message: "The AI assistant is resting. Use the prompt starters." });
+    expect(fetchMock).toHaveBeenCalledTimes(4); // each model tried once, then they rest until the next UTC hour
+    resetPrompts();
+    fetchMock.mockClear();
+    await send(); // next prompt: all four are resting, so Gemini is not called at all
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("unavailable: an unexpected error -> generic message, no raw text, no model name", async () => {
+    fetchMock.mockImplementation(async () => new Response("Traceback: boom at internal/server.js:12 " + KEY, { status: 418 }));
+    const { status, text } = await send();
+    expect(status).toBe(502);
+    expect(JSON.parse(text).error).toMatchObject({ code: "ai_failed", message: "The AI assistant is unavailable right now. Use the prompt starters." });
+    expect(text).not.toMatch(/Traceback|server\.js|gemini-/);
+    expect(text).not.toContain(KEY);
+    expect(logs()).toMatch(/Gemini 418/);
   });
 });
