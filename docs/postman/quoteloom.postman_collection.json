@@ -559,7 +559,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"My test shop\",\n  \"source_url\": null,\n  \"products\": [\n    {\n      \"sku\": \"SKU-1\",\n      \"title\": \"Test product\",\n      \"price\": 12.5,\n      \"stock\": 5\n    }\n  ]\n}",
+              "raw": "{\n  \"name\": \"My test shop\",\n  \"source_url\": null,\n  \"products\": [\n    {\n      \"sku\": \"SKU-1\",\n      \"title\": \"Test product\",\n      \"description\": \"\",\n      \"price_cents\": 1250,\n      \"currency\": \"USD\",\n      \"stock\": 5\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
