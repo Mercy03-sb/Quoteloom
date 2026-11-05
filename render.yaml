@@ -20,3 +20,6 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      # AG Studio trial licence. Read at BUILD time, so redeploy after changing it. Without it /studio shows the Community view.
+      - key: NEXT_PUBLIC_AG_GRID_LICENSE_KEY
+        sync: false
