@@ -45,25 +45,25 @@ export const PROMPT_STARTERS: PromptStarter[] = [
   {
     label: "Chart sales per day",
     prompt: "Chart sales per day.",
-    reply: "The AI model is unavailable, so this is a prebuilt report: sales per day (demo orders are included and labelled in the data).",
+    reply: "Showing a prebuilt report instead: sales per day (demo orders are included and labelled in the data).",
     state: report(page("sales", { sales: { w: widgets.sales, l: at(0, 0, 24, 18) } })),
   },
   {
     label: "Which agent searches most?",
     prompt: "Which agent searches most? Show it as a chart.",
-    reply: "The AI model is unavailable, so this is a prebuilt report: searches per agent, highest first by eye.",
+    reply: "Showing a prebuilt report instead: searches per agent, highest first by eye.",
     state: report(page("agents", { agents: { w: widgets.agents, l: at(0, 0, 24, 18) } })),
   },
   {
     label: "Show unmet demand",
     prompt: "Show unmet demand.",
-    reply: "The AI model is unavailable, so this is a prebuilt report: searches that found nothing, with similar items from other retailers where available.",
+    reply: "Showing a prebuilt report instead: searches that found nothing, with similar items from other retailers where available.",
     state: report(page("unmet", { unmet: { w: widgets.unmet, l: at(0, 0, 24, 18) } })),
   },
   {
     label: "Dispute status",
     prompt: "Show disputes by status.",
-    reply: "The AI model is unavailable, so this is a prebuilt report: disputes by status.",
+    reply: "Showing a prebuilt report instead: disputes by status.",
     state: report(page("disputes", { disputes: { w: widgets.disputes, l: at(0, 0, 24, 18) } })),
   },
 ];

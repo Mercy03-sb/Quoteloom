@@ -107,6 +107,6 @@ describe("studio licence guard and error boundary", () => {
       );
     });
     expect(onError).toHaveBeenCalledTimes(1);
-    expect(errors.mock.calls.some((c) => String(c[0]).includes("[studio] AG Studio crashed"))).toBe(true);
+    expect(errors.mock.calls.some((c: unknown[]) => String(c[0]).includes("[studio] AG Studio crashed"))).toBe(true);
   });
 });
