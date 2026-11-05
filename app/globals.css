@@ -345,3 +345,6 @@ a { color: var(--c-accent); }
 .built-with { display: grid; gap: var(--sp-4); margin: 0; }
 .built-with dt { font-weight: 700; }
 .built-with dd { margin: 2px 0 0; color: var(--c-text-muted); max-width: 70ch; }
+
+/* AG Studio dashboard (/studio) */
+.studio-box { height: clamp(560px, 78vh, 960px); width: 100%; border: 1px solid var(--c-border); border-radius: var(--r-lg); overflow: hidden; background: var(--c-surface); }

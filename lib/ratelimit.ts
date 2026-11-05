@@ -2,7 +2,7 @@
 // Every costly endpoint is limited twice: per workspace and per IP.
 
 export type Limit = { max: number; windowMs: number };
-export type Bucket = "ingest" | "publish" | "chat" | "checkout" | "dispute" | "channel3" | "channel3_all";
+export type Bucket = "ingest" | "publish" | "chat" | "checkout" | "dispute" | "channel3" | "channel3_all" | "studio_data" | "studio_ai";
 
 /** Per-bucket limits. The IP limit is looser than the workspace one so shared networks still work. */
 export const LIMITS: Record<Bucket, { workspace: Limit; ip: Limit }> = {
@@ -13,6 +13,9 @@ export const LIMITS: Record<Bucket, { workspace: Limit; ip: Limit }> = {
   // Live Channel3 calls cost credits: per workspace, per IP, and one global daily cap (called with fixed ids "all").
   channel3: { workspace: { max: 20, windowMs: 10 * 60_000 }, ip: { max: 40, windowMs: 10 * 60_000 } },
   channel3_all: { workspace: { max: 300, windowMs: 24 * 3600_000 }, ip: { max: 300, windowMs: 24 * 3600_000 } },
+  studio_data: { workspace: { max: 60, windowMs: 60_000 }, ip: { max: 120, windowMs: 60_000 } },
+  // Each dashboard prompt can take several model turns (one per tool call), so this is looser than the free Gemini quota can sustain; Gemini 429s are handled separately.
+  studio_ai: { workspace: { max: 30, windowMs: 60_000 }, ip: { max: 60, windowMs: 60_000 } },
   dispute: { workspace: { max: 20, windowMs: 60_000 }, ip: { max: 40, windowMs: 60_000 } },
 };
 
