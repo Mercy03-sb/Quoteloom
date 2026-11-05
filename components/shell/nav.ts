@@ -4,10 +4,10 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard" },
   { href: "/setup", label: "Set up a shop" },
   { href: "/catalog", label: "Catalog" },
-  { href: "/chat", label: "Buyer chat" },
+  { href: "/playground", label: "Agent playground", also: ["/chat"] },
   { href: "/orders", label: "Orders & disputes", also: ["/disputes"] },
   { href: "/settings", label: "Shop settings" },
-  { href: "/analytics", label: "Analytics", soon: true },
+  { href: "/analytics", label: "Analytics" },
 ];
 
 export function isActive(pathname: string, href: string, also: string[] = []): boolean {

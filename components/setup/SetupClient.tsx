@@ -186,7 +186,7 @@ export function SetupClient({ shopCount, maxShops }: { shopCount: number; maxSho
           </div>
         </Card>
         <div className="row">
-          <Link className="btn btn-primary" href={`/chat?shop=${published.slug}`}>Try it in buyer chat</Link>
+          <Link className="btn btn-primary" href={`/playground?shop=${published.slug}`}>Try it in the agent playground</Link>
           <Link className="btn btn-secondary" href={`/?shop=${published.slug}`}>Open dashboard</Link>
           <Link className="btn btn-secondary" href={`/catalog?shop=${published.slug}`}>View catalog</Link>
           <Button variant="ghost" onClick={reset}>Set up another shop</Button>

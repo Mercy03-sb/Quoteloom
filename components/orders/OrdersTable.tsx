@@ -43,7 +43,7 @@ export function OrdersTable({ rows }: { rows: OrderListItem[] }) {
       searchOf={searchOf}
       label="orders"
       emptyTitle="No orders yet"
-      emptyText="Orders appear here after a buyer agent checks out. Try the Buyer chat: search, get a quote (try an offer) and pay in simulation mode."
+      emptyText="Orders appear here after a buyer agent checks out. Try the Agent playground: search, get a quote (try an offer) and pay in simulation mode."
       extra={NEGOTIATED}
     />
   );

@@ -188,6 +188,7 @@ describe("shell", () => {
     expect(out).toContain('href="/orders"');
     expect(out).toContain('href="/settings"');
     expect(out).toContain("Orders &amp; disputes");
-    expect(out.match(/Soon/g)?.length).toBe(1); // only Analytics is left
+    expect(out).not.toContain("Soon");
+    expect(out).toContain('href="/analytics"');
   });
 });

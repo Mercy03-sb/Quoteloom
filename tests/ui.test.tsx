@@ -86,7 +86,7 @@ describe("navigation and stock helpers", () => {
   });
 
   it("only links to real pages, the rest are flagged soon", () => {
-    expect(NAV_ITEMS.filter((i) => !i.soon).map((i) => i.href)).toEqual(["/", "/setup", "/catalog", "/chat", "/orders", "/settings"]);
+    expect(NAV_ITEMS.filter((i) => !i.soon).map((i) => i.href)).toEqual(["/", "/setup", "/catalog", "/playground", "/orders", "/settings", "/analytics"]);
   });
 
   it("classifies stock", () => {

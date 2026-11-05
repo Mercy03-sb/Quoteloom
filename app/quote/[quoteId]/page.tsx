@@ -17,7 +17,7 @@ export default async function QuotePage({ params }: { params: Promise<{ quoteId:
   if (!info) {
     return (
       <div className="page">
-        <EmptyState title="Quote not found" action={<Link className="btn btn-primary" href="/chat">Back to buyer chat</Link>}>
+        <EmptyState title="Quote not found" action={<Link className="btn btn-primary" href="/playground">Back to the playground</Link>}>
           This quote does not exist. The demo database resets when the server restarts.
         </EmptyState>
       </div>

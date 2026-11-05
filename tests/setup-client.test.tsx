@@ -118,7 +118,7 @@ describe("SetupClient", () => {
     fireEvent.click(publishBtn());
     expect((await screen.findByTestId("mcp-url")).textContent).toBe("http://localhost:3000/m/clay-shop/mcp");
     expect(screen.getByRole("button", { name: "Copy URL" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Try it in buyer chat" }).getAttribute("href")).toBe("/chat?shop=clay-shop");
+    expect(screen.getByRole("link", { name: "Try it in the agent playground" }).getAttribute("href")).toBe("/playground?shop=clay-shop");
     expect(screen.getByRole("link", { name: "Open dashboard" }).getAttribute("href")).toBe("/?shop=clay-shop");
   });
 
