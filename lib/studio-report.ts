@@ -51,31 +51,33 @@ export const PROMPT_STARTERS: PromptStarter[] = [
   {
     label: "Chart sales per day",
     prompt: "Chart sales per day.",
-    reply: "Prebuilt report: sales per day (demo orders are included and labelled in the data).",
+    reply: "Loaded the prebuilt sales view (no AI used). Demo orders are included and labelled in the data.",
     state: report(page("sales", { sales: { w: widgets.sales, l: at(0, 0, 24, 18) } })),
   },
   {
     label: "Which agent searches most?",
     prompt: "Which agent searches most? Show it as a chart.",
-    reply: "Prebuilt report: searches per agent, highest first by eye.",
+    reply: "Loaded the prebuilt searches-per-agent view (no AI used).",
     state: report(page("agents", { agents: { w: widgets.agents, l: at(0, 0, 24, 18) } })),
   },
   {
     label: "Show unmet demand",
     prompt: "Show unmet demand.",
-    reply: "Prebuilt report: searches that found nothing, with similar items from other retailers where available.",
+    reply: "Loaded the prebuilt unmet-demand view (no AI used): searches that found nothing, with similar items from other retailers where available.",
     state: report(page("unmet", { unmet: { w: widgets.unmet, l: at(0, 0, 24, 18) } })),
   },
   {
     label: "Dispute status",
     prompt: "Show disputes by status.",
-    reply: "Prebuilt report: disputes by status.",
+    reply: "Loaded the prebuilt disputes view (no AI used).",
     state: report(page("disputes", { disputes: { w: widgets.disputes, l: at(0, 0, 24, 18) } })),
   },
 ];
 
-/** The starter whose prompt matches this text exactly, if any. */
+const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+
+/** The starter whose prompt or chip label matches this text (case and punctuation ignored), if any. Typing a chip's label gets the same free view. */
 export function starterFor(text: string): PromptStarter | undefined {
-  const t = text.trim();
-  return PROMPT_STARTERS.find((s) => s.prompt === t);
+  const t = norm(text);
+  return PROMPT_STARTERS.find((s) => norm(s.prompt) === t || norm(s.label) === t);
 }

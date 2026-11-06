@@ -49,3 +49,24 @@ export function recordTurn(s: PromptState, t: { httpCalls: number; inputTokens: 
 export function resetPrompts(): void {
   states().clear();
 }
+
+const label = (name: string) => name.replace(/_/g, " ");
+
+/**
+ * What to tell the reader when a prompt ran out of steps: what the agent did (from the tool calls in the conversation) and that
+ * the rest is left. Counts and tool names only; nothing the user typed.
+ */
+export function capMessage(input: readonly Record<string, unknown>[], max = MAX_TURNS_PER_PROMPT): string {
+  const names = input.filter((i) => i.type === "function_call").map((i) => String(i.name ?? ""));
+  const widgets = names.filter((n) => n === "add_widget").length;
+  const others = [...new Set(names.filter((n) => n && n !== "add_widget"))].map(label);
+  const did: string[] = [];
+  if (widgets) did.push(`added ${widgets} widget${widgets === 1 ? "" : "s"}`);
+  if (others.length) did.push(`used ${others.join(", ")}`);
+  const done = did.length ? `I ${did.join(" and ")}` : "I didn't get to change the dashboard";
+  return `${done}, but didn't finish within ${max} steps (the free quota is limited). Ask me to continue.`;
+}
+
+/** Added to the last turn's request: the model has no tools left and must say what is done and what is not. */
+export const LAST_TURN_NOTE =
+  "\n\nThis is your last step and you have no tools now. Reply in one or two sentences: say what you already did and, if something is left, what it is and that the user can ask you to continue.";

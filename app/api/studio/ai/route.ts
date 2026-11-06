@@ -2,7 +2,7 @@ import { generateTurn, geminiKey } from "@/lib/llm";
 import { clientIp, limiter, limitResponse } from "@/lib/ratelimit";
 import { canCall } from "@/lib/budget";
 import { failureToError, MAX_BODY_BYTES, RESTING_MESSAGE, StudioAiRequest, toGeminiBody, toStudioResponse } from "@/lib/studio-ai";
-import { beginPrompt, continuePrompt, isLastTurn, MAX_TURNS_PER_PROMPT, recordTurn, startsNewPrompt } from "@/lib/studio-prompts";
+import { beginPrompt, capMessage, continuePrompt, isLastTurn, LAST_TURN_NOTE, recordTurn, startsNewPrompt } from "@/lib/studio-prompts";
 import { workspaceIdFrom } from "@/lib/workspace";
 
 export const runtime = "nodejs";
@@ -53,19 +53,26 @@ export async function POST(req: Request): Promise<Response> {
     prompt = beginPrompt(who);
   } else {
     prompt = continuePrompt(who);
-    if (!prompt) return fail(429, "ai_turn_cap", `I stopped after ${MAX_TURNS_PER_PROMPT} steps to save the free quota. Ask again to continue.`);
+    if (!prompt) return fail(429, "ai_turn_cap", capMessage(parsed.data.input));
     if (!canCall("studio")) return fail(429, "ai_resting", RESTING_MESSAGE);
   }
 
   // On the last allowed turn the model gets no choice of tools, so the prompt ends with a text answer.
-  const body = toGeminiBody(isLastTurn(prompt) ? { ...parsed.data, toolChoice: "none" } : parsed.data);
+  const last = isLastTurn(prompt);
+  const body = toGeminiBody(last ? { ...parsed.data, toolChoice: "none", instructions: `${parsed.data.instructions ?? ""}${LAST_TURN_NOTE}` } : parsed.data);
   const turn = await generateTurn({ body, source: "studio" });
   if (!turn.ok) {
     console.warn(recordTurn(prompt, { httpCalls: turn.attempts ?? 0, inputTokens: 0, outputTokens: 0, done: true }) + " (failed)");
     const e = failureToError(turn);
     return fail(e.status, e.code, e.message);
   }
-  const done = !turn.parts.some((p) => p.functionCall) || isLastTurn(prompt);
+  const done = !turn.parts.some((p) => p.functionCall) || last;
   console.info(recordTurn(prompt, { httpCalls: turn.attempts, inputTokens: turn.usage.inputTokens, outputTokens: turn.usage.outputTokens, model: turn.model, done }));
-  return Response.json(toStudioResponse(turn), { headers: noStore });
+  const res = toStudioResponse(turn);
+  // Last turn with no text (or a stray tool call): say what was done and what is left, from the conversation itself.
+  if (last) res.output = res.output.filter((o) => o.type === "message");
+  if (last && res.output.length === 0) {
+    res.output = [{ id: `cap_${prompt.id}`, kind: "output", type: "message", role: "assistant", status: "completed", content: [{ type: "text", text: capMessage(parsed.data.input), annotations: [] }] }];
+  }
+  return Response.json(res, { headers: noStore });
 }

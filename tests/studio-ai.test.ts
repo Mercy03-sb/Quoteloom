@@ -230,7 +230,17 @@ describe("browser adapter", () => {
       const next = setState.mock.calls[0][0];
       expect(next.selectedPageId).toBe(starter.state.selectedPageId);
       expect(next.panels).toEqual({ filters: { collapsed: true } }); // the rest of the state is kept
-      expect(JSON.stringify(r.output)).toContain("Prebuilt report");
+      expect(JSON.stringify(r.output)).toMatch(/Loaded the prebuilt .* \(no AI used\)/);
+    }
+  });
+
+  it("matches a starter typed by hand (case, final period and label): still no network call", async () => {
+    for (const text of ["Chart sales per day", "chart sales per day.", "Chart sales per day."]) {
+      const fetchImpl = vi.fn();
+      const api = { getState: () => ({ pages: [], selectedPageId: "old" }), setState: vi.fn() };
+      await createStudioAdapter({ getApi: () => api as never, fetchImpl: fetchImpl as never }).executeTurn(request(text)).complete;
+      expect(fetchImpl).not.toHaveBeenCalled();
+      expect(api.setState).toHaveBeenCalledTimes(1);
     }
   });
 
@@ -305,23 +315,45 @@ describe("browser adapter", () => {
   });
 });
 
-describe("one prompt takes at most 3 model turns", () => {
+describe("one prompt takes at most 4 model turns", () => {
   const toolOut = (id: string) => ({ type: "function_call_output", callId: id, output: "{}", status: "completed" });
   const fc = (id: string) => ({ id, kind: "output", type: "function_call", callId: id, name: "add_widget", arguments: "{}", status: "completed" });
   const turn = (n: number) => baseReq({ input: [userMsg("Show orders by status"), ...Array.from({ length: n }, (_, i) => fc(`c${i}`)), ...(n ? [toolOut(`c${n - 1}`)] : [])] });
   const toolModes = () => fetchMock.mock.calls.map(([, init]) => JSON.parse(String((init as RequestInit).body)).toolConfig?.functionCallingConfig?.mode);
 
-  it("forces a text answer on the third turn and refuses a fourth without calling Gemini", async () => {
+  it("forces a text answer on the fourth turn and refuses a fifth without calling Gemini", async () => {
     fetchMock.mockImplementation(async () => geminiOk([{ functionCall: { name: "add_widget", args: {} } }]));
-    expect((await post(turn(0))).status).toBe(200);
-    expect((await post(turn(1))).status).toBe(200);
+    for (const n of [0, 1, 2]) expect((await post(turn(n))).status).toBe(200);
     fetchMock.mockImplementation(async () => geminiOk([{ text: "Done." }]));
-    expect((await post(turn(2))).status).toBe(200);
-    expect(toolModes()).toEqual(["AUTO", "AUTO", "NONE"]); // turn 3 may not call tools
-    const fourth = await post(turn(3));
-    expect(fourth.status).toBe(429);
-    expect((await fourth.json()).error.code).toBe("ai_turn_cap");
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect((await post(turn(3))).status).toBe(200);
+    expect(toolModes()).toEqual(["AUTO", "AUTO", "AUTO", "NONE"]); // turn 4 may not call tools
+    const fifth = await post(turn(4));
+    expect(fifth.status).toBe(429);
+    const err = (await fifth.json()).error;
+    expect(err.code).toBe("ai_turn_cap");
+    expect(err.message).toMatch(/I added 4 widgets, but didn't finish within 4 steps.*Ask me to continue/); // says what was done and what is left
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("the last turn tells the model to say what is done and what is left, and a tool call or empty answer there becomes the cap message", async () => {
+    fetchMock.mockImplementation(async () => geminiOk([{ functionCall: { name: "add_widget", args: {} } }]));
+    for (const n of [0, 1, 2]) await post(turn(n));
+    const res = await post(turn(3));
+    const sent = JSON.parse(String((fetchMock.mock.calls[3][1] as RequestInit).body));
+    expect(sent.systemInstruction.parts[0].text).toContain("last step and you have no tools");
+    const out = (await res.json()).output;
+    expect(out.every((o: { type: string }) => o.type === "message")).toBe(true);
+    expect(JSON.stringify(out)).toMatch(/I added 3 widgets, but didn't finish within 4 steps.*Ask me to continue/);
+  });
+
+  it("a free-text chart prompt with a fake model: one tool turn, one text turn = 2 model calls (http_calls)", async () => {
+    const info = console.info as unknown as { mock: { calls: unknown[][] } };
+    fetchMock.mockResolvedValueOnce(geminiOk([{ functionCall: { name: "add_widget", args: {} } }])).mockResolvedValueOnce(geminiOk([{ text: "Added a line chart." }]));
+    await post(baseReq({ input: [userMsg("Chart revenue per week")] }));
+    await post(baseReq({ input: [userMsg("Chart revenue per week"), fc("c0"), toolOut("c0")] }));
+    const lines = info.mock.calls.map((c) => String(c[0]));
+    expect(lines.join(" ")).toMatch(/turn=1\/4 http_calls=1 /);
+    expect(lines[1]).toMatch(/turn=2\/4 http_calls=1 .*prompt total: model_turns=2 http_calls=2 /);
   });
 
   it("logs counts per turn and per prompt, never the prompt, the answer or the key", async () => {
@@ -331,8 +363,8 @@ describe("one prompt takes at most 3 model turns", () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "SECRET ANSWER TEXT" }] } }], usageMetadata: { promptTokenCount: 1500, candidatesTokenCount: 30 } }), { status: 200 }));
     await post(turn(1));
     const lines = info.mock.calls.map((c) => String(c[0]));
-    expect(lines[0]).toMatch(/^\[studio-ai\] prompt=[0-9a-f]{6} turn=1\/3 http_calls=1 input_tokens=1234 model=gemini-3\.5-flash-lite$/);
-    expect(lines[1]).toMatch(/turn=2\/3 http_calls=1 input_tokens=1500 .*prompt total: model_turns=2 http_calls=2 input_tokens=2734 output_tokens=50$/);
+    expect(lines[0]).toMatch(/^\[studio-ai\] prompt=[0-9a-f]{6} turn=1\/4 http_calls=1 input_tokens=1234 model=gemini-3\.5-flash-lite$/);
+    expect(lines[1]).toMatch(/turn=2\/4 http_calls=1 input_tokens=1500 .*prompt total: model_turns=2 http_calls=2 input_tokens=2734 output_tokens=50$/);
     const all = lines.join("\n");
     expect(all).not.toMatch(/orders by status|SECRET ANSWER|add_widget/);
     expect(all).not.toContain(KEY);
@@ -342,7 +374,7 @@ describe("one prompt takes at most 3 model turns", () => {
     fetchMock.mockResolvedValueOnce(geminiErr(429, "RESOURCE_EXHAUSTED", "RequestsPerMinute")).mockResolvedValueOnce(geminiOk([{ text: "Hi" }]));
     await post(turn(0));
     const line = String((console.info as unknown as { mock: { calls: unknown[][] } }).mock.calls[0][0]);
-    expect(line).toMatch(/turn=1\/3 http_calls=2 /);
+    expect(line).toMatch(/turn=1\/4 http_calls=2 /);
   });
 });
 
